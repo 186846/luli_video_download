@@ -25,6 +25,39 @@ from app.douyin import (
 ProgressHook = Callable[[dict[str, Any]], None]
 
 
+class _QuietLogger:
+    """吞掉 yt-dlp 控制台输出。
+
+    Windows + uvicorn 下，stdout/stderr 句柄偶发异常时，yt-dlp 的 to_screen
+    会抛出 OSError: [Errno 22] Invalid argument，导致「解析失败」。
+    """
+
+    def debug(self, msg: str) -> None:
+        pass
+
+    def info(self, msg: str) -> None:
+        pass
+
+    def warning(self, msg: str) -> None:
+        pass
+
+    def error(self, msg: str) -> None:
+        pass
+
+
+def _base_ydl_opts(**extra: Any) -> dict[str, Any]:
+    opts: dict[str, Any] = {
+        "quiet": True,
+        "no_warnings": True,
+        "noprogress": True,
+        "logger": _QuietLogger(),
+        # 勿开 listsubtitles：会 to_screen 打印字幕表，Windows 下易触发 Errno 22
+        "listsubtitles": False,
+    }
+    opts.update(extra)
+    return opts
+
+
 def _safe_filename(title: str) -> str:
     """去掉 Windows 非法文件名字符。"""
     cleaned = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", title or "video")
@@ -231,7 +264,11 @@ def _dedupe_formats(formats: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _collect_subtitles(info: dict[str, Any]) -> list[dict[str, Any]]:
-    """汇总人工字幕 + 自动字幕，供前端下拉选择。"""
+    """汇总人工字幕 + 自动字幕，供前端下拉选择。
+
+    同时保留 B 站弹幕轨（lang=danmaku / comment.bilibili.com），
+    作为字幕兜底源（前端可展示、AI 总结可用）。
+    """
     out: list[dict[str, Any]] = []
     seen: set[str] = set()
 
@@ -245,35 +282,75 @@ def _collect_subtitles(info: dict[str, Any]) -> list[dict[str, Any]]:
             if key in seen:
                 continue
             seen.add(key)
-            # Prefer vtt/srt
             preferred = None
             for t in tracks:
                 ext = (t.get("ext") or "").lower()
-                if ext in ("vtt", "srt", "ass"):
+                if ext in ("vtt", "srt", "ass", "ttml", "srv3", "json3"):
                     preferred = t
                     break
             preferred = preferred or tracks[0]
+            lang_s = str(lang)
+            name = preferred.get("name") or lang_s
+            is_danmaku = lang_s.lower() == "danmaku" or "comment.bilibili.com" in str(
+                preferred.get("url") or ""
+            )
+            if automatic and "自动" not in str(name) and "auto" not in str(name).lower():
+                name = f"{name}（自动）"
+            if is_danmaku:
+                name = "弹幕（B 站兜底）"
             out.append(
                 {
-                    "lang": lang,
-                    "name": preferred.get("name") or lang,
+                    "lang": lang_s,
+                    "name": name,
                     "ext": preferred.get("ext") or "vtt",
                     "automatic": automatic,
+                    "is_danmaku": is_danmaku,
                     "url": preferred.get("url"),
                 }
             )
 
     add_group(info.get("subtitles"), False)
     add_group(info.get("automatic_captions"), True)
-    # 排序：人工优先、中文优先
-    out.sort(
-        key=lambda s: (
-            1 if s["automatic"] else 0,
-            0 if str(s["lang"]).lower().startswith("zh") else 1,
-            s["lang"],
-        )
-    )
+
+    def _rank(s: dict[str, Any]) -> tuple:
+        # 弹幕轨排在所有真实字幕之后：让前端默认选中真实字幕
+        if s.get("is_danmaku"):
+            return (1, 2, str(s.get("lang") or "danmaku"))
+        lang = str(s.get("lang") or "").lower()
+        auto = 1 if s.get("automatic") else 0
+        if lang in {"zh-hans", "zh-cn", "zh"}:
+            zh = 0
+        elif lang.startswith("zh") or lang.startswith("ai-zh") or lang in {"yue", "zh-hant", "zh-tw"}:
+            zh = 1
+        else:
+            zh = 2
+        return (auto, zh, lang)
+
+    out.sort(key=_rank)
     return out
+
+
+def fetch_subtitle_url_content(track_url: str, *, page_url: str | None = None) -> str:
+    """直接拉取字幕轨 URL（比再走一遍 yt-dlp 下载更稳、更快）。"""
+    import httpx
+
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        ),
+        "Accept": "*/*",
+    }
+    if page_url:
+        headers["Referer"] = page_url
+    with httpx.Client(timeout=45.0, follow_redirects=True) as client:
+        resp = client.get(track_url, headers=headers)
+        resp.raise_for_status()
+        # 部分 CDN 返回 gzip 已由 httpx 解码
+        text = resp.text
+        if not text or not text.strip():
+            raise RuntimeError("字幕内容为空")
+        return text
 
 
 def parse_video(url: str) -> dict[str, Any]:
@@ -282,15 +359,12 @@ def parse_video(url: str) -> dict[str, Any]:
     if is_douyin_url(url):
         return parse_douyin(url)
 
-    ydl_opts: dict[str, Any] = {
-        "quiet": True,
-        "no_warnings": True,
-        "skip_download": True,
-        "noplaylist": True,  # 播放列表只取首条，避免一次解析过大
-        "writesubtitles": False,
-        "writeautomaticsub": False,
-        "listsubtitles": False,
-    }
+    ydl_opts: dict[str, Any] = _base_ydl_opts(
+        skip_download=True,
+        noplaylist=True,  # 播放列表只取首条，避免一次解析过大
+        writesubtitles=False,
+        writeautomaticsub=False,
+    )
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
         if info is None:
@@ -319,6 +393,14 @@ def parse_video(url: str) -> dict[str, Any]:
 
     extractor = info.get("extractor_key") or info.get("extractor") or "unknown"
     duration = info.get("duration")
+    webpage_url = info.get("webpage_url") or url
+    subs = _collect_subtitles(info)
+    try:
+        from app.bilibili_subs import merge_bilibili_tracks_into_subtitles
+
+        subs = merge_bilibili_tracks_into_subtitles(webpage_url, subs)
+    except Exception:  # noqa: BLE001
+        pass
 
     return {
         "id": info.get("id"),
@@ -330,10 +412,10 @@ def parse_video(url: str) -> dict[str, Any]:
         "uploader": info.get("uploader") or info.get("channel"),
         "description": (info.get("description") or "")[:280] or None,
         "view_count": info.get("view_count"),
-        "webpage_url": info.get("webpage_url") or url,
+        "webpage_url": webpage_url,
         "extractor": extractor,
         "formats": formats,
-        "subtitles": _collect_subtitles(info),
+        "subtitles": subs,
         "original_url": url,
     }
 
@@ -364,17 +446,15 @@ def download_video(
 
     hooks = [progress_hook] if progress_hook else []
 
-    ydl_opts: dict[str, Any] = {
-        "quiet": True,
-        "no_warnings": True,
-        "noplaylist": True,
-        "format": format_id,
-        "outtmpl": outtmpl,
-        "progress_hooks": hooks,
-        "restrictfilenames": False,
-        "windowsfilenames": True,
-        "merge_output_format": "mp4",
-    }
+    ydl_opts: dict[str, Any] = _base_ydl_opts(
+        noplaylist=True,
+        format=format_id,
+        outtmpl=outtmpl,
+        progress_hooks=hooks,
+        restrictfilenames=False,
+        windowsfilenames=True,
+        merge_output_format="mp4",
+    )
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
@@ -432,13 +512,11 @@ def resolve_direct_url(url: str, format_id: str) -> dict[str, Any]:
             "该清晰度需要合并音视频，无法提供单一直链，请使用「下载到本地」"
         )
 
-    ydl_opts: dict[str, Any] = {
-        "quiet": True,
-        "no_warnings": True,
-        "skip_download": True,
-        "noplaylist": True,
-        "format": fid,
-    }
+    ydl_opts: dict[str, Any] = _base_ydl_opts(
+        skip_download=True,
+        noplaylist=True,
+        format=fid,
+    )
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
         if info is None:
@@ -474,18 +552,16 @@ def download_subtitle(
     outdir.mkdir(parents=True, exist_ok=True)
     outtmpl = str(outdir / "%(title).80B [%(id)s]")
 
-    ydl_opts: dict[str, Any] = {
-        "quiet": True,
-        "no_warnings": True,
-        "noplaylist": True,
-        "skip_download": True,  # 只下字幕，不下视频
-        "writesubtitles": not automatic,
-        "writeautomaticsub": automatic,
-        "subtitleslangs": [lang],
-        "subtitlesformat": "vtt/srt/best",
-        "outtmpl": outtmpl,
-        "windowsfilenames": True,
-    }
+    ydl_opts: dict[str, Any] = _base_ydl_opts(
+        noplaylist=True,
+        skip_download=True,  # 只下字幕，不下视频
+        writesubtitles=not automatic,
+        writeautomaticsub=automatic,
+        subtitleslangs=[lang],
+        subtitlesformat="vtt/srt/best",
+        outtmpl=outtmpl,
+        windowsfilenames=True,
+    )
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
@@ -507,3 +583,49 @@ def download_subtitle(
     if candidates:
         return candidates[0]
     raise RuntimeError("未找到字幕文件（该语言可能不可用）")
+
+
+def download_audio(
+    url: str,
+    outdir: Path,
+    progress_hook: ProgressHook | None = None,
+) -> tuple[Path, dict[str, Any]]:
+    """仅下载并提取音频（不下载视频），返回 (音频文件路径, yt-dlp info)。"""
+    outdir.mkdir(parents=True, exist_ok=True)
+    outtmpl = str(outdir / "%(title).80B [%(id)s].%(ext)s")
+
+    hooks = [progress_hook] if progress_hook else []
+
+    ydl_opts: dict[str, Any] = _base_ydl_opts(
+        noplaylist=True,
+        format="bestaudio/best",
+        outtmpl=outtmpl,
+        progress_hooks=hooks,
+        restrictfilenames=False,
+        windowsfilenames=True,
+        postprocessors=[
+            {
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "mp3",
+                "preferredquality": "128",
+            }
+        ],
+    )
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=True)
+        if info is None:
+            raise RuntimeError("音频下载失败：未返回媒体信息")
+
+    # yt-dlp 合并后输出扩展名可能变化，按最近修改时间找文件
+    candidates = sorted(
+        [p for p in outdir.iterdir() if p.is_file()],
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    for path in candidates:
+        if path.suffix.lower() in {".mp3", ".m4a", ".opus", ".aac", ".wav", ".webm", ".ogg", ".flac"}:
+            return path, info
+    if candidates:
+        return candidates[0], info
+    raise RuntimeError("音频下载完成但未找到输出文件")

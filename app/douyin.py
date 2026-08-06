@@ -176,8 +176,16 @@ def _fetch_share_item(aweme_id: str) -> dict[str, Any]:
                 if item:
                     return item
                 if filter_reason:
+                    hint = ""
+                    if "audit_not_pass" in str(filter_reason):
+                        hint = (
+                            "（审核未通过/仅登录可见）。"
+                            "该视频在抖音 App 内可能正常，但公开 API 禁止匿名访问。"
+                            "可尝试在 App 内使用「复制链接」分享到微信，"
+                            "然后粘贴链接到输入框。"
+                        )
                     raise ValueError(
-                        f"抖音作品不可访问（{filter_reason}），可能已删除或仅作者可见"
+                        f"抖音作品不可访问（{filter_reason}）{hint}"
                     )
                 raise ValueError("分享页未返回作品详情")
             except Exception as exc:  # noqa: BLE001
@@ -253,6 +261,14 @@ def parse_douyin(url: str) -> dict[str, Any]:
     stats = item.get("statistics") or {}
     view_count = stats.get("play_count") or stats.get("digg_count")
 
+    # 提取 hashtag 标签作为 AI 总结的元数据兜底
+    hashtags: list[str] = []
+    for extra in item.get("text_extra") or []:
+        if isinstance(extra, dict):
+            name = (extra.get("hashtag_name") or "").strip()
+            if name:
+                hashtags.append(name)
+
     formats: list[dict[str, Any]] = []
     if video_uri:
         for ratio, height in _RATIO_CHOICES:
@@ -301,6 +317,13 @@ def parse_douyin(url: str) -> dict[str, Any]:
         )
 
     webpage = f"https://www.douyin.com/video/{aweme_id}"
+    # 把 desc 中夹杂的 #话题 单独拆出来
+    import re as _re
+    desc_hashtags = _re.findall(r"#([^\s#]+)", title)
+    all_tags = []
+    for t in hashtags + desc_hashtags:
+        if t and t not in all_tags:
+            all_tags.append(t)
     return {
         "id": aweme_id,
         "title": title,
@@ -314,6 +337,7 @@ def parse_douyin(url: str) -> dict[str, Any]:
         "extractor": "Douyin",
         "formats": formats,
         "subtitles": [],
+        "tags": all_tags,
         "original_url": cleaned,
         "douyin_uri": video_uri,
     }

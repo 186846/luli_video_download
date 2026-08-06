@@ -43,6 +43,8 @@ Base URL（本地）：`http://127.0.0.1:8000`
 | GET | `/api/files/{task_id}` | 下载已完成的文件 |
 | POST | `/api/direct` | 解析单流直链（模式②） |
 | POST | `/api/subtitles/download` | 下载字幕文件 |
+| POST | `/api/summarize` | AI 视频总结（摘要/字幕/导图；无 Key 时 Mock） |
+| POST | `/api/summarize/ask` | 针对视频内容的 AI 问答 |
 | GET | `/api/thumbnail` | 封面图代理（防盗链） |
 
 ---
@@ -58,7 +60,7 @@ Base URL（本地）：`http://127.0.0.1:8000`
   "ok": true,
   "brand": "速下",
   "free_max_height": 720,
-  "features": ["parse", "download", "direct", "subtitles", "progress"],
+  "features": ["parse", "download", "direct", "subtitles", "summarize", "ask", "progress"],
   "notice": "仅供个人学习，请尊重版权，勿用于商业传播"
 }
 ```
@@ -339,6 +341,87 @@ const res = await fetch('/api/subtitles/download', {
 const blob = await res.blob()
 // 再创建 a[download] 触发保存
 ```
+
+---
+
+## 7.1 AI 视频总结
+
+`POST /api/summarize`
+
+创建后台总结任务，立即返回 `task_id`。文本来源：B 站官方 CC/AI（dm/view）→ yt-dlp → 用户粘贴/上传 → 弹幕 → 元数据。不做 Whisper / OCR。未配置 `SPEEDYDL_AI_API_KEY` 时 Mock。详情页见前端 `/summary`。详见 [AI视频总结方案](./AI视频总结方案.md)。
+
+### 请求体
+
+```json
+{
+  "url": "https://www.bilibili.com/video/BVxxxx",
+  "lang": "zh-Hans",
+  "automatic": false,
+  "vip_token": "demo-vip",
+  "title": "可选标题"
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| url | string | 是 | 视频页 URL |
+| lang | string | 否 | 字幕语言；省略则自动优选 |
+| automatic | bool | 否 | 是否自动字幕 |
+| vip_token | string | 条件 | 默认需 `demo-vip` |
+| title | string | 否 | 可选，辅助 Mock/提示词 |
+
+### 成功响应
+
+```json
+{ "ok": true, "task_id": "abc123" }
+```
+
+随后可用轮询或 SSE 取结果：
+
+- `GET /api/summarize/status/{task_id}`
+- `GET /api/summarize/stream/{task_id}`（SSE：`progress` / `done` / `error`）
+
+任务完成后 `task.data` 关键字段：
+
+| 字段 | 说明 |
+|------|------|
+| mode | `mock` 未配置 Key；`llm` 已调用兼容 Chat Completions |
+| source | `subtitles` 平台/官方字幕（含 B 站 AI）；`user` 用户粘贴；`danmaku` 弹幕；`metadata` 仅标题/简介 |
+| transcript | 带时间戳字幕列表（过长会截断，见 `transcript_truncated`） |
+| mind_map | 树形导图 `{name, children[]}` |
+| chapters | 有字幕时尽量给出带 `start` 时间戳的大纲；无则空数组 |
+
+---
+
+## 7.2 AI 问答
+
+### 同步（兼容）
+
+`POST /api/summarize/ask`
+
+```json
+{
+  "url": "https://www.bilibili.com/video/BVxxxx",
+  "question": "核心结论是什么？",
+  "vip_token": "demo-vip",
+  "transcript": [{"start": "00:01", "text": "…"}]
+}
+```
+
+响应：`{ ok, data: { mode, answer, question, source, warning } }`
+
+### 流式 SSE（推荐）
+
+`POST /api/chat`
+
+请求体同上。`Content-Type: text/event-stream`，事件：
+
+| event | 说明 |
+|-------|------|
+| status | `{ message }` 阶段提示 |
+| token | `{ text }` 增量文本 |
+| done | 完整 `data`（同同步接口） |
+| error | `{ error }` |
 
 ---
 
