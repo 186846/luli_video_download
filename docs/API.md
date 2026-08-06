@@ -1,8 +1,8 @@
 # 速下 SpeedyDL — 接口文档
 
 版本：`0.3.0`  
-Base URL（本地）：`http://127.0.0.1:8000`  
-交互式文档：`http://127.0.0.1:8000/docs`（Swagger） / `http://127.0.0.1:8000/redoc`
+Base URL（本地）：`http://127.0.0.1:8001`（若改回 8000，请同步 Vite 代理）  
+交互式文档：`http://127.0.0.1:8001/docs`（Swagger） / `http://127.0.0.1:8001/redoc`
 
 > 仅供个人学习。请尊重版权与各平台服务条款。  
 > 关联文档：[需求分析](./需求分析.md) · [方案设计](./方案设计.md) · [部署文档](./部署文档.md)
@@ -348,7 +348,7 @@ const blob = await res.blob()
 
 `POST /api/summarize`
 
-创建后台总结任务，立即返回 `task_id`。文本来源：B 站官方 CC/AI（dm/view）→ yt-dlp → 用户粘贴/上传 → 弹幕 → 元数据。不做 Whisper / OCR。未配置 `SPEEDYDL_AI_API_KEY` 时 Mock。详情页见前端 `/summary`。详见 [AI视频总结方案](./AI视频总结方案.md)。
+创建后台总结任务，立即返回 `task_id`。文本来源：B 站官方 CC/AI（dm/view）→ yt-dlp → 用户粘贴/上传 → 弹幕 → 元数据。不做 Whisper / OCR。章节大纲按字幕时间轴 / 片长锚点划分（长视频强制覆盖全片）。未配置 `SPEEDYDL_AI_API_KEY` 时 Mock。详情页见前端 `/summary`。详见 [AI视频总结方案](./AI视频总结方案.md)。
 
 ### 请求体
 
@@ -388,8 +388,9 @@ const blob = await res.blob()
 | mode | `mock` 未配置 Key；`llm` 已调用兼容 Chat Completions |
 | source | `subtitles` 平台/官方字幕（含 B 站 AI）；`user` 用户粘贴；`danmaku` 弹幕；`metadata` 仅标题/简介 |
 | transcript | 带时间戳字幕列表（过长会截断，见 `transcript_truncated`） |
-| mind_map | 树形导图 `{name, children[]}` |
-| chapters | 有字幕时尽量给出带 `start` 时间戳的大纲；无则空数组 |
+| chapters | 章节大纲：`start` 按字幕时间轴 / 片长锚点划分（≥10 分钟强制覆盖全片）；`title`/`summary` 由模型生成 |
+| mind_map | 树形导图 `{name, children[]}`（前端 `MindMapCanvas` 渲染） |
+| duration | 视频时长（秒），用于章节锚点与跳转钳制 |
 
 ---
 
@@ -495,31 +496,31 @@ POST /api/parse → 选 subtitles 项
 
 ```bash
 # 健康检查
-curl http://127.0.0.1:8000/api/health
+curl http://127.0.0.1:8001/api/health
 
 # 解析
-curl -X POST http://127.0.0.1:8000/api/parse \
+curl -X POST http://127.0.0.1:8001/api/parse \
   -H "Content-Type: application/json" \
   -d "{\"url\":\"https://www.bilibili.com/video/BV1GJ411x7h7\"}"
 
 # 创建下载（720p 示例，format_id 以解析结果为准）
-curl -X POST http://127.0.0.1:8000/api/download \
+curl -X POST http://127.0.0.1:8001/api/download \
   -H "Content-Type: application/json" \
   -d "{\"url\":\"https://www.bilibili.com/video/BV1GJ411x7h7\",\"format_id\":\"30064+bestaudio/best\",\"height\":720}"
 
 # 查进度
-curl http://127.0.0.1:8000/api/tasks/<task_id>
+curl http://127.0.0.1:8001/api/tasks/<task_id>
 
 # 取文件
-curl -OJ http://127.0.0.1:8000/api/files/<task_id>
+curl -OJ http://127.0.0.1:8001/api/files/<task_id>
 
 # 直链（单流 format_id）
-curl -X POST http://127.0.0.1:8000/api/direct \
+curl -X POST http://127.0.0.1:8001/api/direct \
   -H "Content-Type: application/json" \
   -d "{\"url\":\"https://www.bilibili.com/video/BV1GJ411x7h7\",\"format_id\":\"30280\"}"
 
 # 字幕
-curl -X POST http://127.0.0.1:8000/api/subtitles/download \
+curl -X POST http://127.0.0.1:8001/api/subtitles/download \
   -H "Content-Type: application/json" \
   -d "{\"url\":\"https://www.youtube.com/watch?v=xxxx\",\"lang\":\"zh-Hans\",\"automatic\":false}" \
   -o subtitle.vtt

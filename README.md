@@ -19,12 +19,13 @@
 ## 架构
 
 - **前端** `web/`：Vue 3 + Vite（`http://127.0.0.1:5173`，代理 `/api`）
-- **后端** `app/`：FastAPI（`http://127.0.0.1:8000`，自带 `/docs`）
+- **后端** `app/`：FastAPI（本地默认 `http://127.0.0.1:8001`，自带 `/docs`）
 - **下载模式①**：服务端落盘后提供 `/api/files/{id}`
 - **直链模式②**：`/api/direct` 返回单流直链（合并清晰度不可用）
-- **字幕**：解析返回字幕列表，`/api/subtitles/download` 下载
-- **AI 总结**：`/api/summarize`（字幕优先；无 Key 时 Mock）
-- **无 CC 字幕**：弹幕兜底 → 元数据（不做默认语音转写，保证秒出）
+- **字幕**：解析返回字幕列表（含 B 站官方 CC/AI 合并），`/api/subtitles/download` 下载
+- **AI 总结**：`/api/summarize` → `/summary` 详情页（摘要 · 字幕 · 思维导图 · 问答）
+- **文本来源**：B 站官方 CC/AI → yt-dlp → 用户粘贴/上传 → 弹幕 → 标题/简介（不做 Whisper / OCR）
+- **章节大纲**：按字幕时间轴 / 片长均分锚点，避免长视频章节挤在片头
 - **历史**：浏览器 localStorage，最多 20 条
 
 ## 环境
@@ -32,8 +33,6 @@
 - Python 3.11+
 - Node.js 18+
 - [ffmpeg](https://ffmpeg.org/) 已加入 PATH
-
-AI 总结文本来源：B 站官方 CC/AI → yt-dlp → 用户粘贴/上传 → 弹幕 → 标题/简介（不做 Whisper / OCR）。
 
 ## 启动
 
@@ -43,8 +42,10 @@ AI 总结文本来源：B 站官方 CC/AI → yt-dlp → 用户粘贴/上传 →
 cd d:\luli
 .\.venv\Scripts\activate
 pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
 ```
+
+> Windows 若本机 `8000` 被僵尸进程占用，请使用 **8001**（与 `web/vite.config.js` 代理一致）。
 
 ### 2. 前端（另开终端）
 
@@ -61,7 +62,7 @@ npm run dev
 ## API
 
 完整说明见 **[docs/API.md](docs/API.md)**。  
-在线交互文档：后端启动后打开 http://127.0.0.1:8000/docs
+在线交互文档：后端启动后打开 http://127.0.0.1:8001/docs
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
@@ -70,8 +71,10 @@ npm run dev
 | POST | `/api/download` | 服务端下载任务 |
 | POST | `/api/direct` | 解析单流直链 |
 | POST | `/api/subtitles/download` | 下载字幕文件 |
-| POST | `/api/summarize` | AI 视频总结（无 Key 时 Mock）→ 前端跳转 `/summary` |
-| POST | `/api/summarize/ask` | 针对视频内容问答 |
+| POST | `/api/summarize` | AI 视频总结（异步任务；无 Key 时 Mock） |
+| GET | `/api/summarize/stream/{id}` | 总结进度 SSE |
+| POST | `/api/summarize/ask` | 针对视频内容问答（同步） |
+| POST | `/api/chat` | 针对视频内容问答（SSE） |
 | GET | `/api/tasks/{id}` | 任务进度 |
 | GET | `/api/files/{id}` | 取回已下载文件 |
 | GET | `/api/thumbnail` | 封面代理 |

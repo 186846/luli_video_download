@@ -14,10 +14,12 @@
 | 字幕 Tab | 轨信息、条数、**关键词搜索高亮**、**匹配导航**、复制、时间跳转、当前句高亮；无字幕时区分「平台无轨 / 拉取失败」 |
 | 摘要 Tab | 摘要 + 要点 + **章节时间戳跳转**（跳转后切字幕 Tab 高亮对应句）+ **导出 Markdown** |
 | 文本来源 | **B 站官方 CC/AI** → **yt-dlp** → **用户字幕** → **弹幕** → **元数据**（不做 Whisper / OCR） |
-| 后端模块 | `bilibili_subs`（B站官方字幕）· `SubtitleExtractor` · `VideoSummarizer` |
+| 章节大纲 | **按字幕时间轴 / 片长均分锚点**；模型负责标题与摘要；长视频强制覆盖全片 |
+| 后端模块 | `bilibili_subs` · `summarizer` · `embed` |
 | 推送 | 总结进度与问答均支持 **SSE**（`/api/summarize/stream` · `/api/chat`） |
 | 模型 | OpenAI 兼容；无 Key 自动 Mock；**LLM JSON 解析容错**（解析失败降级兜底） |
 | 门禁 | 演示 VIP（`vip_token=demo-vip`） |
+| 思维导图 | NoteGPT 风格画布：`MindMapCanvas`（缩放 / 拖拽 / 折叠 / 导出 SVG） |
 
 ### 1.1 本轮新增三项能力
 
@@ -72,7 +74,7 @@ flowchart LR
 |------|------|------|
 | `/` | `views/HomeView.vue` | 解析入口 + AI 总结按钮 |
 | `/summary` | `views/SummaryView.vue` | 四 Tab + 三项新能力 |
-| 导图节点 | `components/MindMapNode.vue` | 递归树 |
+| 思维导图 | `components/MindMapCanvas.vue` | NoteGPT 风格画布导图 |
 | 播放器工具 | `utils/embedPlayer.js` | 时间戳解析 + embed URL 构建 |
 | **文件导出工具** | `utils/exportFile.js` | `downloadMarkdown` / `downloadTxt` / `safeFilename` |
 
