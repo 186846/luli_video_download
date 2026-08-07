@@ -42,9 +42,13 @@ Base URL（本地）：`http://127.0.0.1:8001`（若改回 8000，请同步 Vite
 | GET | `/api/tasks/{task_id}` | 查询下载进度 |
 | GET | `/api/files/{task_id}` | 下载已完成的文件 |
 | POST | `/api/direct` | 解析单流直链（模式②） |
-| POST | `/api/subtitles/download` | 下载字幕文件 |
-| POST | `/api/summarize` | AI 视频总结（摘要/字幕/导图；无 Key 时 Mock） |
-| POST | `/api/summarize/ask` | 针对视频内容的 AI 问答 |
+| POST | `/api/subtitles/download` | 下载字幕文件（API 保留；首页 UI 已移除，总结页导出 TXT/SRT/VTT） |
+| POST | `/api/summarize` | AI 视频总结（异步任务；无 Key 时 Mock） |
+| GET | `/api/summarize/status/{task_id}` | 总结任务状态轮询 |
+| GET | `/api/summarize/stream/{task_id}` | 总结进度 SSE |
+| POST | `/api/summarize/ask` | 针对视频内容的 AI 问答（同步） |
+| POST | `/api/chat` | 针对视频内容的 AI 问答（SSE） |
+| GET | `/api/embed` | 页内播放参数（如 B 站 cid） |
 | GET | `/api/thumbnail` | 封面图代理（防盗链） |
 
 ---

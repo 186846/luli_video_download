@@ -74,9 +74,11 @@ npm run dev
 | POST | `/api/direct` | 解析单流直链 |
 | POST | `/api/subtitles/download` | 下载字幕文件 |
 | POST | `/api/summarize` | AI 视频总结（异步任务；无 Key 时 Mock） |
+| GET | `/api/summarize/status/{id}` | 总结任务状态轮询 |
 | GET | `/api/summarize/stream/{id}` | 总结进度 SSE |
 | POST | `/api/summarize/ask` | 针对视频内容问答（同步） |
 | POST | `/api/chat` | 针对视频内容问答（SSE） |
+| GET | `/api/embed` | 页内播放参数 |
 | GET | `/api/tasks/{id}` | 任务进度 |
 | GET | `/api/files/{id}` | 取回已下载文件 |
 | GET | `/api/thumbnail` | 封面代理 |
