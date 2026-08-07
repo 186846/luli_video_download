@@ -1,7 +1,7 @@
 # 速下 SpeedyDL — AI 视频总结方案
 
 > 关联：[竞品调研](./竞品调研-AI视频总结.md) · [API](./API.md) · [方案设计](./方案设计.md)  
-> 范围：学习向总结详情页（摘要 · 字幕 · 思维导图 · AI 问答）+ 三项增强能力
+> 范围：学习向总结详情页（摘要 · 字幕 · 弹幕 · 思维导图 · AI 问答）+ 导出 / 导图 / 左侧简介增强
 
 ---
 
@@ -9,25 +9,28 @@
 
 | 项 | 决定 |
 |----|------|
-| 入口 | 首页结果卡点「AI 总结」→ **跳转 `/summary` 详情页** |
-| 详情 Tab | **摘要**（PO 核心）· **字幕/转录（带时间戳）** · **思维导图** · **AI 问答** |
-| 字幕 Tab | 轨信息、条数、**关键词搜索高亮**、**匹配导航**、复制、时间跳转、当前句高亮；无字幕时区分「平台无轨 / 拉取失败」 |
-| 摘要 Tab | 摘要 + 要点 + **章节时间戳跳转**（跳转后切字幕 Tab 高亮对应句）+ **导出 Markdown** |
+| 入口 | 首页结果卡点「AI 总结」→ **跳转 `/summary` 详情页**（首页不再提供独立「下载字幕」入口） |
+| 详情 Tab | **摘要** · **字幕文本** · **弹幕列表** · **思维导图** · **AI 问答** |
+| 左侧栏 | 播放器 + 标题；**视频简介**展示 AI **整体摘要** + **核心要点**（可滚动铺满剩余高度） |
+| 字幕 / 弹幕 Tab | 轨信息、条数、**关键词搜索高亮**、**匹配导航**、复制、时间跳转；**导出下拉**：TXT / SRT / VTT |
+| 摘要 Tab | 整体摘要 + 核心要点 + **章节时间戳跳转** + **导出 Markdown**；统计条（时长/章节/要点/字幕等） |
 | 文本来源 | **B 站官方 CC/AI** → **yt-dlp** → **用户字幕** → **弹幕** → **元数据**（不做 Whisper / OCR） |
 | 章节大纲 | **按字幕时间轴 / 片长均分锚点**；模型负责标题与摘要；长视频强制覆盖全片 |
-| 后端模块 | `bilibili_subs` · `summarizer` · `embed` |
+| 后端模块 | `bilibili_subs` · `summarizer` · `embed`；总结结果附带 `description` / `uploader` |
 | 推送 | 总结进度与问答均支持 **SSE**（`/api/summarize/stream` · `/api/chat`） |
 | 模型 | OpenAI 兼容；无 Key 自动 Mock；**LLM JSON 解析容错**（解析失败降级兜底） |
 | 门禁 | 演示 VIP（`vip_token=demo-vip`） |
-| 思维导图 | NoteGPT 风格画布：`MindMapCanvas`（缩放 / 拖拽 / 折叠 / 导出 SVG） |
+| 思维导图 | NoteGPT 风格画布：`MindMapCanvas`（缩放 / 拖拽 / 折叠 / **页内全屏** / 导出 **PNG·FreeMind·OPML·SVG**）；详见 [思维导图增强方案](./思维导图增强方案.md) |
 
-### 1.1 本轮新增三项能力
+### 1.1 增强能力一览
 
 | 能力 | 说明 | 改动位置 |
 |------|------|----------|
-| **章节时间戳跳转增强** | 章节点击跳转播放器后，自动切字幕 Tab、清除搜索、按时间高亮对应句并滚动到可视区 | `SummaryView.vue` seekTo 函数 |
-| **字幕搜索高亮** | 搜索关键词时命中词用 `<mark>` 标黄高亮（先 HTML 转义防 XSS），当前匹配项橙色区分；↑/↓ 导航 + 计数 | `SummaryView.vue` highlightHtml / match-nav |
-| **导出 Markdown/TXT** | 摘要 Tab 导出 `.md`（标题/摘要/要点/章节），字幕 Tab 导出 `.txt`（时间戳字幕）；文件名安全处理 | `exportFile.js` + SummaryView 导出按钮 |
+| **章节时间戳跳转增强** | 章节点击跳转播放器后，可联动字幕/弹幕 Tab 高亮对应句并滚动到可视区 | `SummaryView.vue` seekTo |
+| **字幕/弹幕搜索高亮** | 命中词 `<mark>` 高亮；↑/↓ 导航 + 计数 | `SummaryView.vue` highlightHtml / match-nav |
+| **导出 Markdown / 字幕文件** | 摘要 `.md`；字幕/弹幕 **导出菜单**：`.txt` / `.srt` / `.vtt` | `exportFile.js` + SummaryView |
+| **左侧视频简介** | 填入 AI 整体摘要 + 核心要点，替代平台 description 占位 | `SummaryView.vue` sum-intro |
+| **思维导图增强** | 页内全屏 + PNG / `.mm` / OPML / SVG | `mindMapExport.js` · MindMapCanvas |
 
 ---
 
@@ -38,14 +41,17 @@ flowchart LR
   Home[首页解析结果] --> Click[点击AI总结]
   Click --> API[POST_api_summarize]
   API --> Page["/summary 详情页"]
+  Page --> Side[左侧简介: 整体摘要+核心要点]
   Page --> T1[摘要要点章节]
-  Page --> T2[字幕时间轴]
+  Page --> T2[字幕文本]
+  Page --> T2b[弹幕列表]
   Page --> T3[思维导图树]
   Page --> T4[AI问答 ask]
-  T1 -->|章节时间戳点击| Seek[seekTo 跳转播放器 + 切字幕Tab高亮]
-  T1 -->|导出按钮| ExportMD[下载 .md 文件]
-  T2 -->|关键词搜索| Highlight[高亮匹配词 + 导航]
-  T2 -->|导出按钮| ExportTXT[下载 .txt 文件]
+  T1 -->|章节时间戳点击| Seek[seekTo 跳转播放器]
+  T1 -->|导出| ExportMD[下载 .md]
+  T2 -->|搜索 / 导出| SubOut[高亮导航 · TXT/SRT/VTT]
+  T2b -->|搜索 / 导出| DmOut[高亮导航 · TXT/SRT/VTT]
+  T3 -->|全屏 / 导出| MmOut[PNG · mm · OPML · SVG]
   T4 -->|提问 + 透传transcript| AskAPI["POST /api/summarize/ask"]
 ```
 
@@ -60,7 +66,7 @@ flowchart LR
 | POST | `/api/summarize/ask` | 针对视频内容提问（同步 JSON，兼容） |
 | POST | `/api/chat` | 针对视频内容提问（SSE：`status` / `token` / `done` / `error`） |
 
-总结响应关键字段：`summary` · `key_points` · `chapters` · `transcript[{start,text}]` · `mind_map{name,children[]}` · `mode` · `source`
+总结响应关键字段：`summary` · `key_points` · `chapters` · `transcript[{start,text}]` · `mind_map{name,children[]}` · `description` · `uploader` · `mode` · `source`（可含 `danmaku_transcript`）
 
 问答请求：`url` + `question` + `vip_token` + 可选 `lang` + 可选 `transcript[{start,text}]`
 
@@ -72,21 +78,22 @@ flowchart LR
 
 | 路径 | 组件 | 说明 |
 |------|------|------|
-| `/` | `views/HomeView.vue` | 解析入口 + AI 总结按钮 |
-| `/summary` | `views/SummaryView.vue` | 四 Tab + 三项新能力 |
-| 思维导图 | `components/MindMapCanvas.vue` | NoteGPT 风格画布导图 |
+| `/` | `views/HomeView.vue` | 解析入口 + AI 总结按钮（无独立字幕下载 UI） |
+| `/summary` | `views/SummaryView.vue` | 五 Tab + 左侧简介 + 导出 / 跳转增强 |
+| 思维导图 | `components/MindMapCanvas.vue` | 全屏 + 导出菜单 |
 | 播放器工具 | `utils/embedPlayer.js` | 时间戳解析 + embed URL 构建 |
-| **文件导出工具** | `utils/exportFile.js` | `downloadMarkdown` / `downloadTxt` / `safeFilename` |
+| **文本导出** | `utils/exportFile.js` | Markdown / TXT / SRT / VTT + `safeFilename` |
+| **导图导出** | `utils/mindMapExport.js` | PNG / FreeMind `.mm` / OPML / SVG |
 
 ### 4.1 SummaryView 关键函数
 
 | 函数 | 作用 |
 |------|------|
-| `seekTo(ts)` | 跳转播放器 + 切字幕 Tab + 清除搜索 + 滚动到对应字幕 |
+| `seekTo(ts)` | 跳转播放器；在字幕/弹幕 Tab 时高亮对应句并滚动 |
 | `highlightHtml(text, index)` | HTML 转义 + `<mark>` 高亮关键词，当前匹配项加 `.is-current` |
 | `goPrevMatch` / `goNextMatch` | 匹配导航，循环切换 + `scrollIntoView` |
 | `exportMarkdown` | 调用 `formatPlain()` 生成 Markdown，下载 `.md` |
-| `exportTranscriptTxt` | 调用 `formatTranscriptPlain()` 生成纯文本，下载 `.txt` |
+| `exportTranscriptTxt` / `exportSrt` / `exportVtt` | 当前 Tab 时间轴列表导出对应格式 |
 
 ---
 
@@ -114,33 +121,34 @@ flowchart LR
 
 ## 6. 验收清单
 
-### 6.1 基础四 Tab
+### 6.1 基础五 Tab + 左侧简介
 
-1. 演示会员 + 有字幕视频：点 AI 总结 → 进入详情页，四 Tab 可用
-2. 无 Key：`mode=mock`，摘要/导图/问答均可演示
-3. 字幕 Tab 展示时间戳；可搜索
-4. 思维导图展示树形结构
-5. AI 问答可发送问题并得到回答
-6. 未开会员：403 / 前端提示开通
-7. `pytest tests/test_summarize.py` 通过
+1. 演示会员 + 有字幕视频：点 AI 总结 → 进入详情页，五 Tab 可用
+2. 左侧「视频简介」展示整体摘要与核心要点（与右侧摘要一致）
+3. 无 Key：`mode=mock`，摘要/导图/问答均可演示
+4. 字幕 / 弹幕 Tab 展示时间戳；可搜索
+5. 思维导图：页内全屏 + 导出 PNG / `.mm` / OPML / SVG
+6. AI 问答可发送问题并得到回答
+7. 未开会员：403 / 前端提示开通
+8. `pytest tests/test_summarize.py` 通过
 
-### 6.2 新增三项能力
+### 6.2 导出与跳转
 
-8. **章节跳转**：摘要 Tab 点击章节时间戳 → 播放器跳转 + 自动切字幕 Tab + 对应句高亮并滚动到可视区
-9. **字幕搜索高亮**：输入关键词 → 命中词标黄高亮；当前匹配项橙色；↑/↓ 可循环导航；显示 `N/M` 计数
-10. **导出 Markdown**：摘要 Tab 点「导出 Markdown」→ 下载 `{标题}.md`，内容含标题/摘要/要点/章节
-11. **导出 TXT**：字幕 Tab 点「导出 TXT」→ 下载 `{标题}-字幕.txt`，内容为带时间戳的字幕文本
+9. **章节跳转**：摘要 Tab 点击章节时间戳 → 播放器跳转；在字幕/弹幕 Tab 可联动高亮
+10. **搜索高亮**：关键词标黄；↑/↓ 导航；`N/M` 计数
+11. **导出 Markdown**：摘要 Tab → `{标题}.md`（标题/摘要/要点/章节）
+12. **导出 TXT/SRT/VTT**：字幕或弹幕 Tab「导出」菜单下载对应文件
 
 ### 6.3 容错验证
 
-12. **LLM 返回非 JSON**：`_call_llm` 不崩溃，降级为兜底结构
-13. **LLM 返回带前缀文字的 JSON**：`_extract_json` 能提取出 JSON 对象
-14. **问答透传 transcript**：后端不重复 `parse_video`，直接用前端传入的字幕回答
+13. **LLM 返回非 JSON**：`_call_llm` 不崩溃，降级为兜底结构
+14. **LLM 返回带前缀文字的 JSON**：`_extract_json` 能提取出 JSON 对象
+15. **问答透传 transcript**：后端不重复 `parse_video`，直接用前端传入的字幕回答
 
 ### 6.4 双模式验收
 
-15. **Mock 模式**：无 `SPEEDYDL_AI_API_KEY`，四 Tab + 三项新能力全部可用
-16. **真实 LLM 模式**：配置 `SPEEDYDL_AI_API_KEY` 后用有字幕视频验证 LLM 总结 + 问答
+16. **Mock 模式**：无 `SPEEDYDL_AI_API_KEY`，五 Tab + 导出 / 导图增强可用
+17. **真实 LLM 模式**：配置 `SPEEDYDL_AI_API_KEY` 后用有字幕视频验证 LLM 总结 + 问答
 
 ---
 

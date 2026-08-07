@@ -60,3 +60,107 @@ export function downloadTxt(title, content, suffix = '') {
   const name = suffix ? `${base}-${suffix}.txt` : `${base}.txt`
   downloadTextFile(name, content, 'text/plain;charset=utf-8')
 }
+
+/** 时间戳 → 秒；支持 mm:ss / hh:mm:ss / 带小数 */
+export function timestampToSeconds(raw) {
+  const s = String(raw || '').trim().replace(',', '.')
+  if (!s) return 0
+  const parts = s.split(':')
+  try {
+    if (parts.length === 3) {
+      return Number(parts[0]) * 3600 + Number(parts[1]) * 60 + Number(parts[2])
+    }
+    if (parts.length === 2) {
+      return Number(parts[0]) * 60 + Number(parts[1])
+    }
+    return Number(parts[0]) || 0
+  } catch {
+    return 0
+  }
+}
+
+/** 秒 → SRT 时间 HH:MM:SS,mmm */
+export function formatSrtTime(sec) {
+  const t = Math.max(0, Number(sec) || 0)
+  const h = Math.floor(t / 3600)
+  const m = Math.floor((t % 3600) / 60)
+  const s = Math.floor(t % 60)
+  const ms = Math.round((t - Math.floor(t)) * 1000)
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')},${String(ms).padStart(3, '0')}`
+}
+
+/** 秒 → VTT 时间 HH:MM:SS.mmm */
+export function formatVttTime(sec) {
+  return formatSrtTime(sec).replace(',', '.')
+}
+
+/**
+ * 为每条字幕补全 end（秒）：优先 cue.end → 下一条 start → start+3s
+ * @param {Array<{start?: string, end?: string, text?: string}>} cues
+ */
+export function resolveCueRanges(cues) {
+  const list = Array.isArray(cues) ? cues : []
+  return list
+    .map((c, i) => {
+      const start = timestampToSeconds(c?.start)
+      let end =
+        c?.end != null && String(c.end).trim() !== ''
+          ? timestampToSeconds(c.end)
+          : null
+      if (end == null || !(end > start)) {
+        const next = list[i + 1]
+        const nextStart = next ? timestampToSeconds(next.start) : null
+        if (nextStart != null && nextStart > start) end = nextStart
+        else end = start + 3
+      }
+      return {
+        start,
+        end,
+        text: String(c?.text || '').replace(/\r\n/g, '\n').trim(),
+      }
+    })
+    .filter((c) => c.text)
+}
+
+/** transcript → 标准 SRT 文本 */
+export function toSrt(cues) {
+  const ranges = resolveCueRanges(cues)
+  if (!ranges.length) return ''
+  return (
+    ranges
+      .map(
+        (c, i) =>
+          `${i + 1}\n${formatSrtTime(c.start)} --> ${formatSrtTime(c.end)}\n${c.text}\n`,
+      )
+      .join('\n')
+      .trimEnd() + '\n'
+  )
+}
+
+/** transcript → 标准 WebVTT 文本 */
+export function toVtt(cues) {
+  const ranges = resolveCueRanges(cues)
+  if (!ranges.length) return 'WEBVTT\n'
+  const body = ranges
+    .map((c) => `${formatVttTime(c.start)} --> ${formatVttTime(c.end)}\n${c.text}\n`)
+    .join('\n')
+  return `WEBVTT\n\n${body}`.trimEnd() + '\n'
+}
+
+/** 下载 SRT 字幕文件 */
+export function downloadSrt(title, cues) {
+  downloadTextFile(
+    safeFilename(title || 'subtitles', 'srt'),
+    toSrt(cues),
+    'application/x-subrip;charset=utf-8',
+  )
+}
+
+/** 下载 VTT 字幕文件 */
+export function downloadVtt(title, cues) {
+  downloadTextFile(
+    safeFilename(title || 'subtitles', 'vtt'),
+    toVtt(cues),
+    'text/vtt;charset=utf-8',
+  )
+}

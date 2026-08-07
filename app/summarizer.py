@@ -1478,6 +1478,8 @@ def summarize_video(
     result["url"] = ctx["webpage_url"]
     result["thumbnail"] = ctx["thumbnail"]
     result["extractor"] = ctx.get("extractor")
+    result["description"] = (ctx.get("description") or None)
+    result["uploader"] = ctx.get("uploader")
     result["duration"] = duration
     result["transcript"] = cues[:_TRANSCRIPT_MAX]
     result["transcript_truncated"] = len(cues) > _TRANSCRIPT_MAX

@@ -2,7 +2,7 @@
 /**
  * AI 总结详情页：可播原视频 · 摘要 · 字幕 · 思维导图 · AI 问答
  */
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { streamChat, thumbnailUrl } from '../api/client'
 import MindMapCanvas from '../components/MindMapCanvas.vue'
@@ -14,7 +14,7 @@ import {
   parseTimestampToSeconds,
   resolveEmbedPlayer,
 } from '../utils/embedPlayer'
-import { downloadMarkdown, downloadTxt } from '../utils/exportFile'
+import { downloadMarkdown, downloadSrt, downloadTxt, downloadVtt } from '../utils/exportFile'
 
 const router = useRouter()
 const { isVip } = useVip()
@@ -69,10 +69,20 @@ onMounted(async () => {
   } else if (saved.transcript?.length && saved.source !== 'danmaku') {
     tab.value = 'subtitles'
   }
+  document.addEventListener('pointerdown', onExportDocPointer, true)
   // 若会话里没有带 cid 的 player，再向后端补一次
   if (saved.url && (!saved.player?.cid || !saved.player?.embed_url)) {
     await refreshPlayer(0)
   }
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', onExportDocPointer, true)
+  if (exportMsgTimer) clearTimeout(exportMsgTimer)
+})
+
+watch(tab, () => {
+  exportOpen.value = false
 })
 
 // data 切换时同步 useChapterView（默认显示完整列表）
@@ -134,6 +144,28 @@ const sourceLabel = computed(() => {
   if (src === 'user') return '基于用户字幕'
   if (src === 'danmaku') return '基于弹幕'
   return '基于元数据'
+})
+
+/** 左侧简介：展示 AI 整体摘要，铺满剩余空间 */
+const sideIntro = computed(() => {
+  const d = data.value
+  if (!d) return ''
+  return String(d.summary || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+})
+
+const sideKeyPoints = computed(() => data.value?.key_points || [])
+
+const sideMetaLine = computed(() => {
+  const d = data.value
+  if (!d) return ''
+  const parts = []
+  if (d.uploader) parts.push(d.uploader)
+  const dur = formatDurationLabel(d.duration)
+  if (dur && dur !== '—') parts.push(dur)
+  if (d.extractor) parts.push(String(d.extractor))
+  return parts.join(' · ')
 })
 
 /** true: 主 transcript 实为弹幕；平台字幕不算弹幕 */
@@ -392,26 +424,72 @@ async function copyTranscript() {
 }
 
 const exportedMd = ref(false)
-const exportedTxt = ref(false)
+const exportOpen = ref(false)
+const exportMsg = ref('')
+let exportMsgTimer = null
+
+function flashExportMsg(msg) {
+  exportMsg.value = msg
+  if (exportMsgTimer) clearTimeout(exportMsgTimer)
+  exportMsgTimer = setTimeout(() => {
+    exportMsg.value = ''
+    exportMsgTimer = null
+  }, 1800)
+}
+
+function flashExport(flag) {
+  flag.value = true
+  setTimeout(() => {
+    flag.value = false
+  }, 1600)
+}
+
+/** 当前 Tab 对应的可导出时间轴列表 */
+function activeExportCues() {
+  if (tab.value === 'transcript') return danmakuList.value
+  return data.value?.transcript || []
+}
+
+function formatCuesPlain(list) {
+  return (list || []).map((c) => `[${c.start || '--:--'}] ${c.text || ''}`).join('\n')
+}
 
 function exportMarkdown() {
   const d = data.value
   if (!d) return
   downloadMarkdown(d.title || 'AI总结', formatPlain())
-  exportedMd.value = true
-  setTimeout(() => {
-    exportedMd.value = false
-  }, 1600)
+  flashExport(exportedMd)
 }
 
-function exportTranscriptTxt() {
-  const d = data.value
-  if (!d?.transcript?.length) return
-  downloadTxt(d.title || 'AI总结', formatTranscriptPlain(), '字幕')
-  exportedTxt.value = true
-  setTimeout(() => {
-    exportedTxt.value = false
-  }, 1600)
+function runCueExport(fmt) {
+  exportOpen.value = false
+  const list = activeExportCues()
+  if (!list.length) {
+    flashExportMsg('暂无可导出内容')
+    return
+  }
+  const title = data.value?.title || 'AI总结'
+  if (fmt === 'txt') {
+    const suffix = tab.value === 'transcript' ? '弹幕' : '字幕'
+    downloadTxt(title, formatCuesPlain(list), suffix)
+    flashExportMsg(`已导出 ${suffix} TXT`)
+    return
+  }
+  if (fmt === 'srt') {
+    downloadSrt(title, list)
+    flashExportMsg('已导出 SRT')
+    return
+  }
+  if (fmt === 'vtt') {
+    downloadVtt(title, list)
+    flashExportMsg('已导出 VTT')
+  }
+}
+
+function onExportDocPointer(e) {
+  if (!exportOpen.value) return
+  if (e.target?.closest?.('.sum-export')) return
+  exportOpen.value = false
 }
 
 async function onAsk() {
@@ -498,6 +576,70 @@ const presets = [
   '列出 3 个最重要的知识点',
   '适合什么样的学习者观看？',
 ]
+
+const TIMELINE_COLORS = [
+  '#4B8BFF',
+  '#34B36F',
+  '#F59E0B',
+  '#A855F7',
+  '#F43F5E',
+  '#14B8A6',
+  '#6366F1',
+  '#EAB308',
+]
+
+function formatDurationLabel(sec) {
+  const n = Number(sec)
+  if (!Number.isFinite(n) || n <= 0) return '—'
+  const h = Math.floor(n / 3600)
+  const m = Math.floor((n % 3600) / 60)
+  const s = Math.floor(n % 60)
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+
+/** 摘要页顶部数据卡 */
+const overviewStats = computed(() => {
+  const d = data.value
+  if (!d) return []
+  const cueN = Number(d.transcript_count) || d.transcript?.length || 0
+  const dmN = danmakuList.value.length
+  const mindN = d.mind_map?.children?.length || 0
+  return [
+    { key: 'dur', label: '片长', value: formatDurationLabel(d.duration) },
+    { key: 'ch', label: '章节', value: String(d.chapters?.length || 0) },
+    { key: 'kp', label: '要点', value: String(d.key_points?.length || 0) },
+    {
+      key: 'txt',
+      label: hasSubtitles.value ? '字幕' : dmN ? '弹幕' : '文本',
+      value: String(hasSubtitles.value ? cueN : dmN || cueN || 0),
+    },
+    { key: 'mm', label: '导图分支', value: String(mindN) },
+  ]
+})
+
+/** 章节时间轴分段（宽度按时间占比） */
+const chapterSegments = computed(() => {
+  const chapters = data.value?.chapters || []
+  if (!chapters.length) return []
+  const starts = chapters.map((c) => parseTimestampToSeconds(c.start))
+  let total = Number(data.value?.duration) || 0
+  const lastStart = starts[starts.length - 1] || 0
+  if (!(total > lastStart)) total = Math.max(lastStart + 45, 60)
+
+  return chapters.map((c, i) => {
+    const start = starts[i] || 0
+    const end = i + 1 < starts.length ? starts[i + 1] : total
+    const span = Math.max((end || total) - start, 1)
+    return {
+      index: i,
+      title: c.title || `章节 ${i + 1}`,
+      start: c.start,
+      pct: Math.max(2.5, (span / total) * 100),
+      color: TIMELINE_COLORS[i % TIMELINE_COLORS.length],
+    }
+  })
+})
 </script>
 
 <template>
@@ -563,7 +705,40 @@ const presets = [
           <span v-if="embed" class="summary-badge summary-badge--muted">{{ embed.provider }}</span>
         </div>
         <p v-if="data.warning" class="summary-warn">{{ data.warning }}</p>
-        <a v-if="data.url" class="sum-link" :href="data.url" target="_blank" rel="noopener">打开原视频</a>
+
+        <div class="sum-intro">
+          <div class="sum-intro__top">
+            <div class="sum-intro__label">视频简介</div>
+            <p v-if="sideMetaLine" class="sum-intro__meta">{{ sideMetaLine }}</p>
+          </div>
+          <div class="sum-intro__body">
+            <p class="sum-intro__text">
+              {{ sideIntro || '暂无 AI 摘要' }}
+            </p>
+            <div v-if="sideKeyPoints.length" class="sum-intro__section">
+              <div class="sum-intro__label">核心要点</div>
+              <ol class="sum-intro__points">
+                <li v-for="(p, i) in sideKeyPoints" :key="i">{{ p }}</li>
+              </ol>
+            </div>
+          </div>
+          <div class="sum-intro__foot">
+            <a
+              v-if="data.url"
+              class="sum-link"
+              :href="data.url"
+              target="_blank"
+              rel="noopener"
+            >打开原视频</a>
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm"
+              @click="tab = 'summary'"
+            >
+              查看完整摘要
+            </button>
+          </div>
+        </div>
       </aside>
 
       <section class="sum-main">
@@ -603,23 +778,52 @@ const presets = [
           </button>
         </nav>
 
-        <div v-show="tab === 'summary'" class="sum-panel">
-          <h2>整体摘要</h2>
-          <p class="summary-text">{{ data.summary }}</p>
+        <div v-show="tab === 'summary'" class="sum-panel sum-panel--summary">
+          <div class="sum-stats" aria-label="内容概览">
+            <div v-for="s in overviewStats" :key="s.key" class="sum-stat">
+              <span class="sum-stat__value">{{ s.value }}</span>
+              <span class="sum-stat__label">{{ s.label }}</span>
+            </div>
+          </div>
 
-          <template v-if="data.key_points?.length">
+          <section class="sum-block">
+            <h2>整体摘要</h2>
+            <p class="summary-text">{{ data.summary }}</p>
+          </section>
+
+          <section v-if="data.key_points?.length" class="sum-block">
             <h2>核心要点</h2>
-            <ul class="summary-points">
+            <ol class="sum-points-compact">
               <li v-for="(p, i) in data.key_points" :key="i">{{ p }}</li>
-            </ul>
-          </template>
+            </ol>
+          </section>
 
-          <template v-if="data.chapters?.length">
-            <h2>章节大纲</h2>
-            <p class="summary-hint">
-              按字幕时间轴划分
-              <template v-if="embed"> · 点击时间可跳转播放</template>
-            </p>
+          <section v-if="chapterSegments.length" class="sum-block">
+            <h2>
+              章节大纲
+              <small v-if="embed">点击色块或时间可跳转</small>
+            </h2>
+            <div
+              class="sum-timeline"
+              role="img"
+              :aria-label="`共 ${chapterSegments.length} 个章节的时间分布`"
+            >
+              <div class="sum-timeline__bar">
+                <button
+                  v-for="seg in chapterSegments"
+                  :key="seg.index"
+                  type="button"
+                  class="sum-timeline__seg"
+                  :class="{ 'is-clickable': Boolean(embed) }"
+                  :style="{ width: seg.pct + '%', background: seg.color }"
+                  :title="`${formatChapterTime(seg.start)} ${seg.title}`"
+                  :disabled="!embed"
+                  @click="embed && seekTo(seg.start)"
+                >
+                  <span class="sum-timeline__seg-label">{{ seg.index + 1 }}</span>
+                </button>
+              </div>
+            </div>
             <ul class="summary-chapters">
               <li v-for="(c, i) in data.chapters" :key="i">
                 <button
@@ -632,12 +836,19 @@ const presets = [
                 </button>
                 <span v-else class="chapter-time">{{ formatChapterTime(c.start) }}</span>
                 <span class="chapter-body">
-                  <strong>{{ c.title }}</strong>
+                  <strong>
+                    <span
+                      class="chapter-dot"
+                      :style="{ background: TIMELINE_COLORS[i % TIMELINE_COLORS.length] }"
+                      aria-hidden="true"
+                    />
+                    {{ c.title }}
+                  </strong>
                   <span v-if="c.summary">{{ c.summary }}</span>
                 </span>
               </li>
             </ul>
-          </template>
+          </section>
 
           <div class="export-row">
             <button
@@ -651,7 +862,11 @@ const presets = [
         </div>
 
         <!-- ============ 字幕文本：视频自带 CC 字幕（语言文字） ============ -->
-        <div v-show="tab === 'subtitles'" data-panel="subtitles" class="sum-panel">
+        <div
+          v-show="tab === 'subtitles'"
+          data-panel="subtitles"
+          class="sum-panel sum-panel--fill"
+        >
           <!-- 有平台字幕时 -->
           <template v-if="hasSubtitles">
             <div class="sum-toolbar">
@@ -706,13 +921,30 @@ const presets = [
               >
                 {{ transcriptCopied ? '已复制' : '复制字幕' }}
               </button>
-              <button
-                type="button"
-                class="btn btn-outline btn-sm"
-                @click="exportTranscriptTxt"
-              >
-                {{ exportedTxt ? '已导出' : '导出 TXT' }}
-              </button>
+              <div class="sum-export">
+                <button
+                  type="button"
+                  class="btn btn-primary btn-sm"
+                  title="导出字幕"
+                  aria-haspopup="menu"
+                  :aria-expanded="exportOpen"
+                  @click="exportOpen = !exportOpen"
+                >
+                  导出
+                </button>
+                <div v-if="exportOpen" class="sum-export-menu" role="menu">
+                  <button type="button" role="menuitem" @click="runCueExport('txt')">
+                    TXT 纯文本
+                  </button>
+                  <button type="button" role="menuitem" @click="runCueExport('srt')">
+                    SRT 字幕
+                  </button>
+                  <button type="button" role="menuitem" @click="runCueExport('vtt')">
+                    VTT 字幕
+                  </button>
+                </div>
+              </div>
+              <span v-if="exportMsg" class="sum-export-msg">{{ exportMsg }}</span>
             </div>
 
             <div class="transcript-meta">
@@ -771,7 +1003,11 @@ const presets = [
         </div>
 
         <!-- ============ 弹幕列表：B 站等平台的实时评论 ============ -->
-        <div v-show="tab === 'transcript'" data-panel="transcript" class="sum-panel">
+        <div
+          v-show="tab === 'transcript'"
+          data-panel="transcript"
+          class="sum-panel sum-panel--fill"
+        >
           <!-- 有弹幕时 -->
           <template v-if="hasDanmaku">
             <div class="sum-toolbar">
@@ -821,13 +1057,30 @@ const presets = [
               >
                 {{ transcriptCopied ? '已复制' : '复制弹幕' }}
               </button>
-              <button
-                type="button"
-                class="btn btn-outline btn-sm"
-                @click="exportTranscriptTxt"
-              >
-                {{ exportedTxt ? '已导出' : '导出 TXT' }}
-              </button>
+              <div class="sum-export">
+                <button
+                  type="button"
+                  class="btn btn-primary btn-sm"
+                  title="导出弹幕"
+                  aria-haspopup="menu"
+                  :aria-expanded="exportOpen"
+                  @click="exportOpen = !exportOpen"
+                >
+                  导出
+                </button>
+                <div v-if="exportOpen" class="sum-export-menu" role="menu">
+                  <button type="button" role="menuitem" @click="runCueExport('txt')">
+                    TXT 纯文本
+                  </button>
+                  <button type="button" role="menuitem" @click="runCueExport('srt')">
+                    SRT 字幕
+                  </button>
+                  <button type="button" role="menuitem" @click="runCueExport('vtt')">
+                    VTT 字幕
+                  </button>
+                </div>
+              </div>
+              <span v-if="exportMsg" class="sum-export-msg">{{ exportMsg }}</span>
             </div>
 
             <!-- 弹幕源 + 有 AI 章节：默认显示 AI 整理 -->
@@ -901,7 +1154,11 @@ const presets = [
           </div>
         </div>
 
-        <div v-show="tab === 'mindmap'" class="sum-panel sum-panel--mindmap">
+        <div
+          v-show="tab === 'mindmap'"
+          data-panel="mindmap"
+          class="sum-panel sum-panel--fill sum-panel--mindmap"
+        >
           <div v-if="data.mind_map" class="mindmap-shell">
             <MindMapCanvas :root="data.mind_map" />
           </div>

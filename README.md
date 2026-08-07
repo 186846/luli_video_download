@@ -13,7 +13,8 @@
 | [docs/API.md](docs/API.md) | HTTP 接口契约与示例 |
 | [docs/部署文档.md](docs/部署文档.md) | 开发联调、构建、Nginx/Caddy 同源反代与运维要点 |
 | [docs/项目总结.md](docs/项目总结.md) | 主功能完成后的能力清单、决策与限制 |
-| [docs/AI视频总结方案.md](docs/AI视频总结方案.md) | AI 总结 MVP 范围、流程、API 与验收 |
+| [docs/AI视频总结方案.md](docs/AI视频总结方案.md) | AI 总结范围、流程、API 与验收 |
+| [docs/思维导图增强方案.md](docs/思维导图增强方案.md) | 页内全屏与 PNG / FreeMind / OPML 导出 |
 | [docs/竞品调研-AI视频总结.md](docs/竞品调研-AI视频总结.md) | BibiGPT / NoteGPT 调研与边界结论 |
 
 ## 架构
@@ -22,8 +23,9 @@
 - **后端** `app/`：FastAPI（本地默认 `http://127.0.0.1:8001`，自带 `/docs`）
 - **下载模式①**：服务端落盘后提供 `/api/files/{id}`
 - **直链模式②**：`/api/direct` 返回单流直链（合并清晰度不可用）
-- **字幕**：解析返回字幕列表（含 B 站官方 CC/AI 合并），`/api/subtitles/download` 下载
-- **AI 总结**：`/api/summarize` → `/summary` 详情页（摘要 · 字幕 · 思维导图 · 问答）
+- **字幕**：解析仍返回字幕轨（含 B 站官方 CC/AI）；首页不再单独下载，字幕/弹幕在总结页导出 TXT / SRT / VTT
+- **AI 总结**：`/api/summarize` → `/summary`（摘要 · 字幕 · 弹幕 · 思维导图 · 问答）；左侧「视频简介」展示整体摘要与核心要点
+- **思维导图**：页内全屏阅读；导出高清 PNG / FreeMind(`.mm`) / OPML / SVG（`.mm`/`opml` 可导入 XMind、幕布等继续编辑）
 - **文本来源**：B 站官方 CC/AI → yt-dlp → 用户粘贴/上传 → 弹幕 → 标题/简介（不做 Whisper / OCR）
 - **章节大纲**：按字幕时间轴 / 片长均分锚点，避免长视频章节挤在片头
 - **历史**：浏览器 localStorage，最多 20 条

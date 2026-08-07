@@ -1,9 +1,17 @@
 <script setup>
 /**
  * NoteGPT 风格思维导图：
- * 横向展开 · 点阵画布 · 彩色圆角节点 · 贝塞尔连线 · 缩放/拖拽/折叠/导出
+ * 横向展开 · 点阵画布 · 彩色圆角节点 · 贝塞尔连线 ·
+ * 缩放/拖拽/折叠 · 页内全屏 · 导出 PNG / FreeMind / OPML / SVG
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { safeFilename } from '../utils/exportFile'
+import {
+  downloadBlob,
+  downloadFreeMind,
+  downloadOpml,
+  svgToPngBlob,
+} from '../utils/mindMapExport'
 
 const props = defineProps({
   root: { type: Object, required: true },
@@ -25,12 +33,17 @@ const BRANCH = [
 ]
 
 const viewportRef = ref(null)
+const rootEl = ref(null)
 const scale = ref(1)
 const offset = ref({ x: 40, y: 40 })
 const collapsed = ref(new Set())
 const dragging = ref(false)
 const dragStart = ref({ x: 0, y: 0, ox: 0, oy: 0 })
 const layoutTick = ref(0)
+const isFullscreen = ref(false)
+const exportOpen = ref(false)
+const exportBusy = ref(false)
+const exportMsg = ref('')
 
 const ROOT_STYLE = {
   fill: '#1777ff',
@@ -86,10 +99,12 @@ function pathKey(path) {
   return path.join('.')
 }
 
-function cloneVisible(node, path = []) {
+/** @param {boolean} respectCollapse 为 false 时导出完整树 */
+function cloneTree(node, path = [], respectCollapse = true) {
   const key = pathKey(path)
   const kids = Array.isArray(node?.children) ? node.children : []
-  const isCollapsed = collapsed.value.has(key) && kids.length > 0
+  const isCollapsed =
+    respectCollapse && collapsed.value.has(key) && kids.length > 0
   return {
     name: String(node?.name || '未命名'),
     path: [...path],
@@ -98,7 +113,7 @@ function cloneVisible(node, path = []) {
     collapsed: isCollapsed,
     children: isCollapsed
       ? []
-      : kids.map((c, i) => cloneVisible(c, [...path, i])),
+      : kids.map((c, i) => cloneTree(c, [...path, i], respectCollapse)),
     rawChildren: kids.length,
   }
 }
@@ -122,7 +137,6 @@ function assignPos(node, x, yTop) {
   node.y = yTop + node.subH / 2 - node.h / 2
   const kids = node.children || []
   let cy = yTop
-  // 子树总高小于父高时，整体垂直居中
   const kidsH = kids.reduce((s, c) => s + c.subH, 0) + Math.max(0, kids.length - 1) * V_GAP
   if (kids.length && kidsH < node.subH) {
     cy = yTop + (node.subH - kidsH) / 2
@@ -146,10 +160,9 @@ function flatten(node, list = [], links = []) {
   return { nodes: list, links }
 }
 
-const treeModel = computed(() => {
-  layoutTick.value
+function buildModel(respectCollapse) {
   if (!props.root) return null
-  const tree = cloneVisible(props.root)
+  const tree = cloneTree(props.root, [], respectCollapse)
   layoutTree(tree, 0, 0)
   assignPos(tree, PAD, PAD)
   const { nodes, links } = flatten(tree)
@@ -161,6 +174,11 @@ const treeModel = computed(() => {
     width: maxX + PAD,
     height: maxY + PAD,
   }
+}
+
+const treeModel = computed(() => {
+  layoutTick.value
+  return buildModel(true)
 })
 
 const transformStyle = computed(() => ({
@@ -206,6 +224,7 @@ function fitView() {
   if (!el || !model) return
   const vw = el.clientWidth
   const vh = el.clientHeight
+  if (vw <= 0 || vh <= 0) return
   const sx = (vw - 48) / model.width
   const sy = (vh - 48) / model.height
   const s = Math.min(1.05, Math.max(0.35, Math.min(sx, sy)))
@@ -237,6 +256,52 @@ function collapseBranches() {
   nextTick(fitView)
 }
 
+function setBodyScrollLock(lock) {
+  document.body.style.overflow = lock ? 'hidden' : ''
+}
+
+function enterFullscreen() {
+  isFullscreen.value = true
+  exportOpen.value = false
+  setBodyScrollLock(true)
+  nextTick(() => {
+    fitView()
+  })
+}
+
+function exitFullscreen() {
+  if (!isFullscreen.value) return
+  isFullscreen.value = false
+  setBodyScrollLock(false)
+  nextTick(fitView)
+}
+
+function toggleFullscreen() {
+  if (isFullscreen.value) exitFullscreen()
+  else enterFullscreen()
+}
+
+function onKeydown(e) {
+  if (e.key === 'Escape') {
+    if (exportOpen.value) {
+      exportOpen.value = false
+      return
+    }
+    if (isFullscreen.value) {
+      e.preventDefault()
+      exitFullscreen()
+    }
+  }
+}
+
+function onDocPointerDown(e) {
+  if (!exportOpen.value) return
+  if (rootEl.value?.contains(e.target)) {
+    if (e.target?.closest?.('.mmc-export')) return
+  }
+  exportOpen.value = false
+}
+
 function onWheel(e) {
   e.preventDefault()
   const dir = e.deltaY > 0 ? -0.08 : 0.08
@@ -245,7 +310,6 @@ function onWheel(e) {
 
 function onPointerDown(e) {
   if (e.button !== 0) return
-  // 点在节点上不拖动画布
   if (e.target?.closest?.('.mmc-node')) return
   dragging.value = true
   dragStart.value = {
@@ -269,15 +333,18 @@ function onPointerUp() {
   dragging.value = false
 }
 
-function exportSvg() {
-  const model = treeModel.value
-  if (!model) return
-  const escape = (s) =>
-    String(s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
+function escapeSvgText(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+/** 完整展开树的 SVG（导出用，不受折叠影响） */
+function buildFullSvg() {
+  const model = buildModel(false)
+  if (!model) return null
 
   const links = model.links
     .map((l) => {
@@ -293,7 +360,7 @@ function exportSvg() {
       const texts = n.lines
         .map((line, i) => {
           const ty = n.padY + n.fs * 0.9 + i * n.lineH
-          return `<text x="${n.padX}" y="${ty}" fill="${st.text}" font-size="${n.fs}" font-family="Noto Sans SC, sans-serif">${escape(line)}</text>`
+          return `<text x="${n.padX}" y="${ty}" fill="${st.text}" font-size="${n.fs}" font-family="system-ui, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif">${escapeSvgText(line)}</text>`
         })
         .join('')
       return `<g transform="translate(${n.x},${n.y})">
@@ -309,16 +376,85 @@ function exportSvg() {
   ${links}
   ${nodes}
 </svg>`
-  const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `${String(props.root?.name || 'mindmap').slice(0, 40)}.svg`
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  setTimeout(() => URL.revokeObjectURL(url), 800)
+  return { svg, model }
 }
+
+function fileBase() {
+  return String(props.root?.name || 'mindmap').slice(0, 40)
+}
+
+function exportSvg() {
+  exportOpen.value = false
+  const built = buildFullSvg()
+  if (!built) return
+  downloadBlob(
+    safeFilename(fileBase(), 'svg'),
+    new Blob([built.svg], { type: 'image/svg+xml;charset=utf-8' }),
+  )
+  exportMsg.value = '已下载 SVG'
+  clearExportMsgSoon()
+}
+
+async function exportPng() {
+  exportOpen.value = false
+  if (exportBusy.value) return
+  const built = buildFullSvg()
+  if (!built) return
+  exportBusy.value = true
+  exportMsg.value = '正在生成高清 PNG…'
+  try {
+    const blob = await svgToPngBlob(built.svg, {
+      width: built.model.width,
+      height: built.model.height,
+      scale: 2,
+    })
+    downloadBlob(safeFilename(fileBase(), 'png'), blob)
+    exportMsg.value = '已下载 PNG（2x）'
+  } catch (err) {
+    exportMsg.value = err?.message || 'PNG 导出失败'
+  } finally {
+    exportBusy.value = false
+    clearExportMsgSoon()
+  }
+}
+
+function exportMm() {
+  exportOpen.value = false
+  downloadFreeMind(props.root)
+  exportMsg.value = '已下载 FreeMind（.mm）'
+  clearExportMsgSoon()
+}
+
+function exportOpml() {
+  exportOpen.value = false
+  downloadOpml(props.root)
+  exportMsg.value = '已下载 OPML'
+  clearExportMsgSoon()
+}
+
+let msgTimer = null
+function clearExportMsgSoon() {
+  if (msgTimer) clearTimeout(msgTimer)
+  msgTimer = setTimeout(() => {
+    exportMsg.value = ''
+    msgTimer = null
+  }, 2800)
+}
+
+watch(isFullscreen, () => {
+  nextTick(() => {
+    const el = viewportRef.value
+    if (el && resizeObserver) {
+      try {
+        resizeObserver.disconnect()
+        resizeObserver.observe(el)
+      } catch {
+        /* ignore */
+      }
+    }
+    fitView()
+  })
+})
 
 watch(
   () => props.root,
@@ -335,97 +471,130 @@ let resizeObserver = null
 onMounted(() => {
   nextTick(fitView)
   window.addEventListener('resize', fitView)
-  const el = viewportRef.value
-  if (el && typeof ResizeObserver !== 'undefined') {
+  window.addEventListener('keydown', onKeydown)
+  document.addEventListener('pointerdown', onDocPointerDown, true)
+  if (typeof ResizeObserver !== 'undefined') {
     resizeObserver = new ResizeObserver(() => {
-      // v-show 从隐藏切到可见时补一次适应
-      if (el.clientWidth > 0 && el.clientHeight > 0) fitView()
+      const el = viewportRef.value
+      if (el && el.clientWidth > 0 && el.clientHeight > 0) fitView()
     })
-    resizeObserver.observe(el)
+    if (viewportRef.value) resizeObserver.observe(viewportRef.value)
   }
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', fitView)
+  window.removeEventListener('keydown', onKeydown)
+  document.removeEventListener('pointerdown', onDocPointerDown, true)
   resizeObserver?.disconnect()
   resizeObserver = null
+  setBodyScrollLock(false)
+  if (msgTimer) clearTimeout(msgTimer)
 })
 </script>
 
 <template>
-  <div class="mmc">
-    <div class="mmc-toolbar">
-      <button type="button" class="mmc-btn" title="缩小" @click="zoomBy(-0.1)">−</button>
-      <span class="mmc-zoom">{{ zoomLabel }}</span>
-      <button type="button" class="mmc-btn" title="放大" @click="zoomBy(0.1)">+</button>
-      <span class="mmc-sep" />
-      <button type="button" class="mmc-btn" title="适应画布" @click="fitView">适应</button>
-      <button type="button" class="mmc-btn" title="重置" @click="resetView">重置</button>
-      <span class="mmc-sep" />
-      <button type="button" class="mmc-btn" title="展开全部" @click="expandAll">展开</button>
-      <button type="button" class="mmc-btn" title="折叠一级分支" @click="collapseBranches">折叠</button>
-      <span class="mmc-sep" />
-      <button type="button" class="mmc-btn mmc-btn--primary" title="导出 SVG" @click="exportSvg">
-        导出
-      </button>
-    </div>
-
-    <div
-      ref="viewportRef"
-      class="mmc-viewport"
-      :class="{ 'is-dragging': dragging }"
-      @wheel.prevent="onWheel"
-      @pointerdown="onPointerDown"
-      @pointermove="onPointerMove"
-      @pointerup="onPointerUp"
-      @pointercancel="onPointerUp"
-    >
-      <div class="mmc-stage" :style="transformStyle">
-        <svg
-          v-if="treeModel"
-          class="mmc-links"
-          :width="treeModel.width"
-          :height="treeModel.height"
+  <Teleport to="body" :disabled="!isFullscreen">
+    <div ref="rootEl" class="mmc" :class="{ 'is-fullscreen': isFullscreen }">
+      <div class="mmc-toolbar">
+        <button type="button" class="mmc-btn" title="缩小" @click="zoomBy(-0.1)">−</button>
+        <span class="mmc-zoom">{{ zoomLabel }}</span>
+        <button type="button" class="mmc-btn" title="放大" @click="zoomBy(0.1)">+</button>
+        <span class="mmc-sep" />
+        <button type="button" class="mmc-btn" title="适应画布" @click="fitView">适应</button>
+        <button type="button" class="mmc-btn" title="重置" @click="resetView">重置</button>
+        <span class="mmc-sep" />
+        <button type="button" class="mmc-btn" title="展开全部" @click="expandAll">展开</button>
+        <button type="button" class="mmc-btn" title="折叠一级分支" @click="collapseBranches">折叠</button>
+        <span class="mmc-sep" />
+        <button
+          type="button"
+          class="mmc-btn"
+          :title="isFullscreen ? '退出全屏 (Esc)' : '全屏阅读'"
+          @click="toggleFullscreen"
         >
-          <path
-            v-for="(l, i) in treeModel.links"
-            :key="i"
-            class="mmc-link"
-            :d="linkPath(l)"
-            :stroke="l.color"
-          />
-        </svg>
-
-        <div
-          v-for="n in treeModel?.nodes || []"
-          :key="n.key"
-          class="mmc-node"
-          :class="[
-            `mmc-node--lv${Math.min(n.depth, 3)}`,
-            { 'mmc-node--root': n.depth === 0, 'mmc-node--foldable': n.hasKids },
-          ]"
-          :style="{
-            left: `${n.x}px`,
-            top: `${n.y}px`,
-            width: `${n.w}px`,
-            minHeight: `${n.h}px`,
-            '--mmc-fill': nodeStyle(n).fill,
-            '--mmc-border': nodeStyle(n).border,
-            '--mmc-text': nodeStyle(n).text,
-            fontSize: `${n.fs}px`,
-          }"
-          @click.stop="toggle(n)"
-        >
-          <span class="mmc-node-text">
-            <span v-for="(line, li) in n.lines" :key="li" class="mmc-line">{{ line }}</span>
-          </span>
-          <span v-if="n.hasKids" class="mmc-toggle" :title="n.collapsed ? '展开' : '折叠'">
-            {{ n.collapsed ? '+' : '−' }}
-          </span>
+          {{ isFullscreen ? '退出全屏' : '全屏' }}
+        </button>
+        <div class="mmc-export">
+          <button
+            type="button"
+            class="mmc-btn mmc-btn--primary"
+            :disabled="exportBusy"
+            title="导出导图"
+            @click="exportOpen = !exportOpen"
+          >
+            {{ exportBusy ? '导出中…' : '导出' }}
+          </button>
+          <div v-if="exportOpen" class="mmc-export-menu" role="menu">
+            <button type="button" role="menuitem" @click="exportPng">高清 PNG（2x）</button>
+            <button type="button" role="menuitem" @click="exportMm">FreeMind（.mm）</button>
+            <button type="button" role="menuitem" @click="exportOpml">OPML（.opml）</button>
+            <button type="button" role="menuitem" @click="exportSvg">矢量 SVG</button>
+          </div>
         </div>
+        <span v-if="exportMsg" class="mmc-export-msg">{{ exportMsg }}</span>
       </div>
 
-      <p class="mmc-hint">拖拽画布 · 滚轮缩放 · 点击节点折叠</p>
+      <div
+        ref="viewportRef"
+        class="mmc-viewport"
+        :class="{ 'is-dragging': dragging }"
+        @wheel.prevent="onWheel"
+        @pointerdown="onPointerDown"
+        @pointermove="onPointerMove"
+        @pointerup="onPointerUp"
+        @pointercancel="onPointerUp"
+      >
+        <div class="mmc-stage" :style="transformStyle">
+          <svg
+            v-if="treeModel"
+            class="mmc-links"
+            :width="treeModel.width"
+            :height="treeModel.height"
+          >
+            <path
+              v-for="(l, i) in treeModel.links"
+              :key="i"
+              class="mmc-link"
+              :d="linkPath(l)"
+              :stroke="l.color"
+            />
+          </svg>
+
+          <div
+            v-for="n in treeModel?.nodes || []"
+            :key="n.key"
+            class="mmc-node"
+            :class="[
+              `mmc-node--lv${Math.min(n.depth, 3)}`,
+              { 'mmc-node--root': n.depth === 0, 'mmc-node--foldable': n.hasKids },
+            ]"
+            :style="{
+              left: `${n.x}px`,
+              top: `${n.y}px`,
+              width: `${n.w}px`,
+              minHeight: `${n.h}px`,
+              '--mmc-fill': nodeStyle(n).fill,
+              '--mmc-border': nodeStyle(n).border,
+              '--mmc-text': nodeStyle(n).text,
+              fontSize: `${n.fs}px`,
+            }"
+            @click.stop="toggle(n)"
+          >
+            <span class="mmc-node-text">
+              <span v-for="(line, li) in n.lines" :key="li" class="mmc-line">{{ line }}</span>
+            </span>
+            <span v-if="n.hasKids" class="mmc-toggle" :title="n.collapsed ? '展开' : '折叠'">
+              {{ n.collapsed ? '+' : '−' }}
+            </span>
+          </div>
+        </div>
+
+        <p class="mmc-hint">
+          {{ isFullscreen ? '全屏阅读 · ' : '' }}拖拽画布 · 滚轮缩放 · 点击节点折叠
+          <template v-if="isFullscreen"> · Esc 退出</template>
+        </p>
+      </div>
     </div>
-  </div>
+  </Teleport>
 </template>

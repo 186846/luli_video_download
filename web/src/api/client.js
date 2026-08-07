@@ -203,31 +203,3 @@ export function thumbnailUrl(thumb, pageUrl) {
 export function fileUrl(taskId) {
   return `/api/files/${taskId}`
 }
-
-/**
- * 字幕接口返回文件流（非 JSON），需用 blob + a[download] 触发保存。
- */
-export async function downloadSubtitleFile(payload) {
-  const res = await fetch('/api/subtitles/download', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-  if (!res.ok) {
-    const json = await res.json().catch(() => ({}))
-    throw new Error(typeof json.detail === 'string' ? json.detail : '字幕下载失败')
-  }
-  const blob = await res.blob()
-  const disp = res.headers.get('content-disposition') || ''
-  const match = /filename\*?=(?:UTF-8''|")?([^\";]+)/i.exec(disp)
-  const filename = match
-    ? decodeURIComponent(match[1].replace(/"/g, ''))
-    : `subtitle.${payload.lang || 'vtt'}`
-  const a = document.createElement('a')
-  a.href = URL.createObjectURL(blob)
-  a.download = filename
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  URL.revokeObjectURL(a.href)
-}

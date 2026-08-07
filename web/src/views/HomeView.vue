@@ -7,7 +7,6 @@
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  downloadSubtitleFile,
   fileUrl,
   getTask,
   parseVideo,
@@ -40,7 +39,6 @@ const progressText = ref('')
 const downloading = ref(false)
 const directBusy = ref(false)
 const directInfo = ref('')
-const subBusy = ref(false)
 const summarizing = ref(false)
 const summaryError = ref('')
 const summaryProgress = ref(0)
@@ -173,11 +171,6 @@ function descriptionPreview(text) {
   if (!text) return ''
   const t = String(text).replace(/\s+/g, ' ').trim()
   return t.length > 120 ? `${t.slice(0, 120)}…` : t
-}
-
-function subLabel(sub) {
-  const tag = sub.automatic ? '自动' : '人工'
-  return `${sub.lang} · ${tag}${sub.ext ? ` · ${String(sub.ext).toUpperCase()}` : ''}`
 }
 
 /** 免费用户点选 VIP 清晰度时视为锁定 */
@@ -378,23 +371,6 @@ async function onDirect() {
   }
 }
 
-async function onSubtitleDownload() {
-  if (!video.value || !selectedSub.value) return
-  subBusy.value = true
-  try {
-    await downloadSubtitleFile({
-      url: video.value.original_url || video.value.webpage_url,
-      lang: selectedSub.value.lang,
-      automatic: Boolean(selectedSub.value.automatic),
-    })
-    setStatus('字幕已开始下载', 'ok')
-  } catch (err) {
-    setStatus(err.message || String(err), 'error')
-  } finally {
-    subBusy.value = false
-  }
-}
-
 /** AI 总结：创建后台任务 + SSE 进度，完成后跳转详情页 */
 async function onSummarize() {
   if (!video.value) return
@@ -443,6 +419,8 @@ async function onSummarize() {
           ...task.data,
           thumbnail: task.data.thumbnail || video.value.thumbnail,
           extractor: video.value.extractor || null,
+          description: task.data.description || video.value.description || null,
+          uploader: task.data.uploader || video.value.uploader || null,
           video_id: video.value.id || null,
           ask: {
             url,
@@ -688,27 +666,6 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div v-if="subtitles.length" class="sub-row">
-          <label class="sub-label" for="sub-select">字幕</label>
-          <select id="sub-select" v-model="selectedSubKey" class="sub-select">
-            <option
-              v-for="sub in subtitles"
-              :key="subKey(sub)"
-              :value="subKey(sub)"
-            >
-              {{ subLabel(sub) }}
-            </option>
-          </select>
-          <button
-            type="button"
-            class="btn btn-outline btn-sm"
-            :disabled="!selectedSub || subBusy"
-            @click="onSubtitleDownload"
-          >
-            {{ subBusy ? '下载中…' : '下载字幕' }}
-          </button>
-        </div>
-
         <div v-if="needSubtitleFallback" class="user-sub-box">
           <label class="sub-label" for="user-sub-text">无平台字幕时的兜底</label>
           <p class="summary-hint">
@@ -944,56 +901,6 @@ onBeforeUnmount(() => {
       </ul>
     </section>
 
-    <section class="section extras" id="extras" aria-labelledby="extras-title">
-      <h2 id="extras-title" class="section-title">更多能力</h2>
-      <p class="section-sub">解析后即可下载字幕，或一键生成 AI 总结详情页</p>
-      <div class="card-grid card-grid--2">
-        <article class="card platform-card">
-          <div class="card-visual card-visual--sub" aria-hidden="true">
-            <span class="card-visual__glow" />
-            <span class="card-visual__ring" />
-            <svg class="card-icon" viewBox="0 0 64 64" fill="none">
-              <rect x="10" y="14" width="44" height="36" rx="8" fill="#fff" fill-opacity="0.95" />
-              <rect x="16" y="22" width="20" height="4" rx="2" fill="#1777FF" />
-              <rect x="16" y="30" width="32" height="3" rx="1.5" fill="#94A3B8" />
-              <rect x="16" y="37" width="28" height="3" rx="1.5" fill="#94A3B8" />
-              <rect x="38" y="44" width="10" height="6" rx="2" fill="#1777FF" />
-              <text
-                x="43"
-                y="49"
-                text-anchor="middle"
-                fill="#fff"
-                font-size="5"
-                font-weight="800"
-                font-family="Sora, sans-serif"
-              >CC</text>
-            </svg>
-          </div>
-          <h3>字幕下载</h3>
-          <p class="card-tags">平台 CC 优先 · 解析后可选语言轨</p>
-        </article>
-        <article class="card platform-card extras-card--ai">
-          <div class="card-visual card-visual--ai" aria-hidden="true">
-            <span class="card-visual__glow" />
-            <span class="card-visual__ring" />
-            <svg class="card-icon" viewBox="0 0 64 64" fill="none">
-              <circle cx="32" cy="32" r="16" fill="#fff" fill-opacity="0.12" />
-              <path
-                d="M32 18l2.4 8.2H43l-6.8 5 2.6 8.2L32 34.6l-6.8 4.8 2.6-8.2-6.8-5h8.6L32 18z"
-                fill="#FFB801"
-              />
-              <circle cx="48" cy="20" r="2" fill="#fff" fill-opacity="0.8" />
-              <circle cx="16" cy="40" r="1.5" fill="#fff" fill-opacity="0.6" />
-              <circle cx="46" cy="44" r="1.8" fill="#fff" fill-opacity="0.7" />
-            </svg>
-          </div>
-          <h3>AI 视频总结</h3>
-          <p class="card-tags">摘要 · 字幕 · 导图 · 流式问答</p>
-          <p class="extras-ai-hint">粘贴链接解析后，在结果区点击「AI 总结」即可</p>
-        </article>
-      </div>
-    </section>
-
     <section class="section pricing" id="pricing">
       <h2 class="section-title">简单定价</h2>
       <p class="section-sub">学习演示 · 不接真实支付 · 本地一键解锁体验会员权益</p>
@@ -1004,7 +911,7 @@ onBeforeUnmount(() => {
           <ul>
             <li>解析公开视频</li>
             <li>最高 720p</li>
-            <li>单视频下载 / 字幕 / 直链</li>
+            <li>单视频下载 / 直链</li>
           </ul>
           <button type="button" class="btn btn-outline" disabled>当前方案</button>
         </article>
