@@ -9,7 +9,11 @@ alwaysApply: true
 
 1. **按仓库 git 安全协议提交**：`status` / `diff` / `log` → 暂存相关文件 → 写清提交说明 → `commit`（不改 git config；无 identity 时沿用最近一次作者环境变量）。
 2. **推送到 GitHub**：`origin` 为 `https://github.com/186846/luli_video_download.git`；对当前分支执行 `git push -u origin HEAD`（需要网络权限）。未明确要求时不要 `push --force`。
-3. **同步文档**：若本次改动影响能力、部署、SEO、API 或仓库信息，先更新对应 `README.md` / `docs/*` 再一并提交；纯文档微调可与代码同一次提交。
-4. **完成后回报**：给出 commit hash、远程仓库链接、是否已 push 成功。
+3. **本机代理**：若直连 `github.com:443` 失败，而系统代理为 `127.0.0.1:7890`，推送前设置环境变量后再 push（不写进 git config）：
+   - `HTTP_PROXY=http://127.0.0.1:7890`
+   - `HTTPS_PROXY=http://127.0.0.1:7890`
+   - `ALL_PROXY=http://127.0.0.1:7890`
+4. **同步文档**：若本次改动影响能力、部署、SEO、API 或仓库信息，先更新对应 `README.md` / `docs/*` 再一并提交；纯文档微调可与代码同一次提交。
+5. **完成后回报**：给出 commit hash、远程仓库链接、是否已 push 成功。
 
 不要把「提交代码」理解成只 commit 不 push。若工作区无改动但本地超前远程，仍应 push。
