@@ -95,7 +95,7 @@ function isLocked(fmt) {
           <img
             v-if="thumbSrc"
             :src="thumbSrc"
-            :alt="video.title || '封面'"
+            :alt="video.title ? `${video.title} 视频封面` : '视频封面'"
             referrerpolicy="no-referrer"
           />
           <div v-else class="result-thumb--empty" aria-hidden="true" />

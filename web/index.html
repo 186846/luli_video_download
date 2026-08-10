@@ -1,14 +1,95 @@
 <!doctype html>
 <html lang="zh-CN">
   <head>
+    <!-- ========== 基础必需标签 ========== -->
     <meta charset="UTF-8" />
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231777ff'/%3E%3C/svg%3E" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>速下 SpeedyDL — 万能视频下载，一键保存</title>
-    <meta name="description" content="粘贴链接即可解析并下载公开视频。仅供学习，请尊重版权。" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="format-detection" content="telephone=no" />
+
+    <!-- ========== 核心 SEO 标签 ========== -->
+    <title>万能视频下载与AI总结 - 速下 SpeedyDL | 粘贴链接一键保存</title>
+    <meta
+      name="description"
+      content="速下 SpeedyDL 支持粘贴链接一键解析下载公开视频，覆盖 B 站、YouTube 等主流平台，并提供 AI 视频总结、字幕导出与思维导图。免费使用，仅供个人学习，请尊重版权。"
+    />
+    <meta
+      name="keywords"
+      content="万能视频下载,AI视频总结,视频下载,B站视频下载,YouTube下载,视频解析,字幕导出,思维导图,速下,SpeedyDL"
+    />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://saveany.cc/" />
+
+    <!-- ========== Open Graph ========== -->
+    <meta property="og:title" content="万能视频下载与AI总结 - 速下 SpeedyDL | 粘贴链接一键保存" />
+    <meta
+      property="og:description"
+      content="粘贴链接即可解析下载公开视频，并支持 AI 总结、字幕与思维导图。免费使用，仅供学习。"
+    />
+    <meta property="og:image" content="https://saveany.cc/og-image.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://saveany.cc/" />
+    <meta property="og:locale" content="zh_CN" />
+    <meta property="og:site_name" content="速下 SpeedyDL" />
+
+    <!-- ========== Twitter Card ========== -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="万能视频下载与AI总结 - 速下 SpeedyDL" />
+    <meta
+      name="twitter:description"
+      content="粘贴链接即可解析下载公开视频，并支持 AI 总结、字幕与思维导图。免费使用，仅供学习。"
+    />
+    <meta name="twitter:image" content="https://saveany.cc/og-image.png" />
+
+    <!-- ========== Schema.org itemprop ========== -->
+    <meta itemprop="name" content="万能视频下载与AI总结 - 速下 SpeedyDL" />
+    <meta
+      itemprop="description"
+      content="粘贴链接即可解析下载公开视频，并支持 AI 总结、字幕与思维导图。"
+    />
+    <meta itemprop="image" content="https://saveany.cc/og-image.png" />
+
+    <!-- ========== 图标 ========== -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <!-- ========== JSON-LD ========== -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebApplication",
+            "name": "速下 SpeedyDL",
+            "alternateName": "万能视频下载总结器",
+            "url": "https://saveany.cc/",
+            "description": "粘贴链接即可解析下载公开视频，并支持 AI 视频总结、字幕导出与思维导图。仅供个人学习，请尊重版权。",
+            "applicationCategory": "MultimediaApplication",
+            "operatingSystem": "Web",
+            "image": "https://saveany.cc/og-image.png",
+            "inLanguage": "zh-CN",
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "CNY"
+            }
+          },
+          {
+            "@type": "Organization",
+            "name": "速下 SpeedyDL",
+            "url": "https://saveany.cc/",
+            "logo": "https://saveany.cc/apple-touch-icon.png"
+          }
+        ]
+      }
+    </script>
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&family=Sora:wght@500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
   </head>
   <body>
     <div id="app"></div>

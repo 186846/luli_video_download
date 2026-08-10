@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+
+# 会话态动态页，不建议收录
+Disallow: /summary
+
+Sitemap: https://saveany.cc/sitemap.xml

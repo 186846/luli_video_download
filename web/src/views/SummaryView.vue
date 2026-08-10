@@ -6,6 +6,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { streamChat, thumbnailUrl } from '../api'
 import MindMapCanvas from '../components/MindMapCanvas.vue'
+import { applySeo, SUMMARY_DEFAULT_SEO } from '../composables/useSeo'
 import { loadSummarySession, saveSummarySession } from '../composables/useSummarySession'
 import { useVip } from '../composables/useVip'
 import {
@@ -60,6 +61,7 @@ onMounted(async () => {
   }
   data.value = saved
   playerInfo.value = saved.player || null
+  applySummarySeo(saved)
   // 默认进入有内容的文本标签：有平台 CC 进字幕文本，否则有弹幕进弹幕列表
   useChapterView.value = false
   if (saved.transcript?.length && saved.source === 'subtitles') {
@@ -81,9 +83,33 @@ onBeforeUnmount(() => {
   if (exportMsgTimer) clearTimeout(exportMsgTimer)
 })
 
+function applySummarySeo(session) {
+  const videoTitle = (session?.title || '').trim()
+  const title = videoTitle
+    ? `${videoTitle} - AI视频总结 - 速下 SpeedyDL`
+    : SUMMARY_DEFAULT_SEO.title
+  const description = videoTitle
+    ? `「${videoTitle}」的 AI 视频总结：摘要、字幕、弹幕整理与思维导图。速下 SpeedyDL，仅供个人学习。`
+    : SUMMARY_DEFAULT_SEO.description
+  applySeo({
+    ...SUMMARY_DEFAULT_SEO,
+    title,
+    description,
+    ogTitle: title,
+    ogDescription: description,
+  })
+}
+
 watch(tab, () => {
   exportOpen.value = false
 })
+
+watch(
+  () => data.value?.title,
+  () => {
+    if (data.value) applySummarySeo(data.value)
+  }
+)
 
 // data 切换时同步 useChapterView（默认显示完整列表）
 watch(
@@ -680,7 +706,7 @@ const chapterSegments = computed(() => {
               v-if="thumbSrc"
               class="sum-player__poster"
               :src="thumbSrc"
-              :alt="data.title || '封面'"
+              :alt="data.title ? `${data.title} 视频封面` : '视频封面'"
               referrerpolicy="no-referrer"
             />
             <div v-else class="sum-thumb--empty" />

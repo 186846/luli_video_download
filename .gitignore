@@ -12,3 +12,8 @@ build/
 .DS_Store
 web/node_modules/
 web/dist/
+_test_*.py
+t3.txt
+.codebuddy/
+.agents/
+skills-lock.json
