@@ -4,7 +4,7 @@
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { streamChat, thumbnailUrl } from '../api/client'
+import { streamChat, thumbnailUrl } from '../api'
 import MindMapCanvas from '../components/MindMapCanvas.vue'
 import { loadSummarySession, saveSummarySession } from '../composables/useSummarySession'
 import { useVip } from '../composables/useVip'

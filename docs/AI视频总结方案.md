@@ -76,9 +76,11 @@ flowchart LR
 
 ## 4. 前端
 
+首页按区块拆分：`HomeView` 只保留状态与编排，UI 在 `components/`（Hero / VideoResult / HistoryPanel / Pricing 等）。API 按域拆到 `api/video` · `api/summarize` 等，经 `api/index` 统一导出。
+
 | 路径 | 组件 | 说明 |
 |------|------|------|
-| `/` | `views/HomeView.vue` | 解析入口 + AI 总结按钮（无独立字幕下载 UI） |
+| `/` | `views/HomeView.vue` | 解析入口 + AI 总结编排（无独立字幕下载 UI） |
 | `/summary` | `views/SummaryView.vue` | 五 Tab + 左侧简介 + 导出 / 跳转增强 |
 | 思维导图 | `components/MindMapCanvas.vue` | 全屏 + 导出菜单 |
 | 播放器工具 | `utils/embedPlayer.js` | 时间戳解析 + embed URL 构建 |

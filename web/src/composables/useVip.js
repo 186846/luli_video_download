@@ -1,12 +1,13 @@
 /**
  * 演示会员状态（非真实支付）。
- * 仅写 localStorage；请求高清时由前端附带 vip_token=demo-vip，后端再校验。
+ * 仅写 localStorage；请求高清时由前端附带 vip_token，后端再校验。
  */
 import { computed, ref } from 'vue'
+import { VIP_TOKEN } from '../api/auth'
+
+export { VIP_TOKEN }
 
 const VIP_KEY = 'speedydl_vip'
-export const VIP_TOKEN = 'demo-vip'
-
 const vipFlag = ref(localStorage.getItem(VIP_KEY) === '1')
 
 export function useVip() {
