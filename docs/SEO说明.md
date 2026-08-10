@@ -1,6 +1,7 @@
 # 速下 SpeedyDL — SEO 说明
 
-> 关联：[鱼厂 SEO 优化工作流](./鱼厂%20SEO%20优化工作流.md) · [部署文档](./部署文档.md)
+> 关联：[鱼厂 SEO 优化工作流](./鱼厂%20SEO%20优化工作流.md) · [部署文档](./部署文档.md)  
+> 代码仓库：[https://github.com/186846/luli_video_download](https://github.com/186846/luli_video_download)
 
 当前为 **Vue SPA 基础档 SEO**（无 SSR）。占位正式域名为 **`https://saveany.cc`**。
 

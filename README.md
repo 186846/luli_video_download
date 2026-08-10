@@ -4,6 +4,8 @@
 
 > **仅供个人学习。请尊重版权与各平台条款，勿用于商业传播。**
 
+**代码仓库**：[https://github.com/186846/luli_video_download](https://github.com/186846/luli_video_download)
+
 ## 文档（给后续扩展 / AI 参考）
 
 | 文档 | 说明 |
@@ -12,6 +14,7 @@
 | [docs/方案设计.md](docs/方案设计.md) | 架构、模块职责、核心流程、扩展指引 |
 | [docs/API.md](docs/API.md) | HTTP 接口契约与示例 |
 | [docs/部署文档.md](docs/部署文档.md) | 开发联调、构建、Nginx/Caddy 同源反代与运维要点 |
+| [docs/SEO说明.md](docs/SEO说明.md) | 前端 SEO、换域名、站长平台提交清单 |
 | [docs/项目总结.md](docs/项目总结.md) | 主功能完成后的能力清单、决策与限制 |
 | [docs/AI视频总结方案.md](docs/AI视频总结方案.md) | AI 总结范围、流程、API 与验收 |
 | [docs/思维导图增强方案.md](docs/思维导图增强方案.md) | 页内全屏与 PNG / FreeMind / OPML 导出 |
