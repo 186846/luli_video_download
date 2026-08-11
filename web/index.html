@@ -6,6 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="format-detection" content="telephone=no" />
+    <meta name="theme-color" content="#1777FF" />
+    <meta name="color-scheme" content="light" />
 
     <!-- ========== 核心 SEO 标签 ========== -->
     <title>万能视频下载与AI总结 - 速下 SpeedyDL | 粘贴链接一键保存</title>
@@ -53,7 +55,7 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
-    <!-- ========== JSON-LD ========== -->
+    <!-- ========== JSON-LD：WebApplication + Organization + FAQPage ========== -->
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -79,6 +81,43 @@
             "name": "速下 SpeedyDL",
             "url": "https://saveany.cc/",
             "logo": "https://saveany.cc/apple-touch-icon.png"
+          },
+          {
+            "@type": "FAQPage",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "速下 SpeedyDL 是什么？",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "速下 SpeedyDL 是学习向的万能视频下载与 AI 总结工具：粘贴公开视频链接即可解析、选择清晰度并保存到本地，同时支持 AI 摘要、字幕/弹幕导出与思维导图。"
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "支持哪些视频平台？",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "基于 yt-dlp 覆盖大量站点。已验证场景包括哔哩哔哩、YouTube、抖音等公开可访问视频；具体可用性取决于平台策略与网络环境。"
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "AI 视频总结需要什么？",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "优先使用平台官方字幕（含 B 站 CC/AI），也可粘贴用户字幕或参考弹幕与标题简介。不做 Whisper / OCR。总结页提供摘要、字幕、弹幕、思维导图与问答。"
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "可以商用或下载未授权内容吗？",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "不可以。本项目仅供个人学习，请尊重版权与各平台服务条款，勿用于商业传播或下载未授权内容。"
+                }
+              }
+            ]
           }
         ]
       }
@@ -94,5 +133,31 @@
   <body>
     <div id="app"></div>
     <script type="module" src="/src/main.js"></script>
+
+    <!-- 无 JS / 弱渲染爬虫兜底（百度等对 SPA 不友好时仍可读到关键正文） -->
+    <noscript>
+      <main style="max-width: 720px; margin: 2rem auto; padding: 0 1.25rem; font-family: sans-serif; line-height: 1.7; color: #0f172a">
+        <h1>万能视频下载与 AI 总结 - 速下 SpeedyDL</h1>
+        <p>
+          速下 SpeedyDL 支持粘贴公开视频链接一键解析下载，覆盖 B 站、YouTube、抖音等主流平台，并提供
+          <strong>AI 视频总结</strong>、<strong>字幕导出</strong>与<strong>思维导图</strong>。免费使用，仅供个人学习，请尊重版权。
+        </p>
+        <h2>核心能力</h2>
+        <ul>
+          <li><a href="https://saveany.cc/#download">万能视频下载</a>：解析清晰度，服务端下载或复制直链</li>
+          <li><a href="https://saveany.cc/#download">AI 视频总结</a>：摘要、章节大纲、问答</li>
+          <li>字幕 / 弹幕导出：TXT、SRT、VTT</li>
+          <li>思维导图：页内阅读，导出 PNG / FreeMind / OPML</li>
+        </ul>
+        <h2>常见问题</h2>
+        <h3>支持哪些平台？</h3>
+        <p>基于 yt-dlp，常见公开视频站点可用；以实际解析结果为准。</p>
+        <h3>是否收费？</h3>
+        <p>基础解析与下载免费（默认最高约 720p）；更高清晰度与 AI 总结为学习演示会员能力，不接真实支付。</p>
+        <h3>版权说明</h3>
+        <p>请勿下载未授权内容，勿用于商业传播。详见站内「关于与声明」。</p>
+        <p><a href="https://saveany.cc/">返回首页开启 JS 使用完整功能</a></p>
+      </main>
+    </noscript>
   </body>
 </html>

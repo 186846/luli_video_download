@@ -1,6 +1,6 @@
 <template>
-  <section class="section platforms" id="platforms-section">
-    <h2 class="section-title">支持主流平台</h2>
+  <section class="section platforms" id="platforms-section" aria-labelledby="platforms-heading">
+    <h2 id="platforms-heading" class="section-title">支持主流平台</h2>
     <p class="section-sub">站在 yt-dlp 肩膀上，覆盖海量站点（以公开可访问内容为准）</p>
     <div class="card-grid">
       <article class="card platform-card">

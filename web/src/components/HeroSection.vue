@@ -19,8 +19,8 @@ defineExpose({ focus })
 </script>
 
 <template>
-  <section class="hero" id="download">
-    <h1>万能视频下载，<span class="accent">一键保存</span></h1>
+  <section class="hero" id="download" aria-labelledby="hero-heading">
+    <h1 id="hero-heading">万能视频下载，<span class="accent">一键保存</span></h1>
     <p class="hero-sub">粘贴链接 · 选清晰度 · 保存到本地。手机也能用。仅供个人学习。</p>
     <form class="url-bar" autocomplete="off" @submit.prevent="emit('parse', $event)">
       <div class="url-field">

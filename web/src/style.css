@@ -1266,6 +1266,39 @@ img {
   background: rgba(255, 255, 255, 0.6);
 }
 
+.footer-seo {
+  max-width: 720px;
+  margin: 0 auto 0.85rem;
+}
+
+.footer-seo__lead,
+.footer-seo__links {
+  margin: 0 0 0.45rem;
+  line-height: 1.7;
+}
+
+.footer-seo a {
+  color: #475569;
+  text-decoration: none;
+}
+
+.footer-seo a:hover {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+.footer-seo__links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem 1rem;
+}
+
+.footer-copy {
+  margin: 0;
+  color: var(--muted-foreground);
+}
+
 /* Modal */
 .modal-overlay {
   position: fixed;

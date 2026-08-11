@@ -10,17 +10,22 @@
 | 项 | 位置 |
 |----|------|
 | 首页 TDK / OG / Twitter / robots / canonical | `web/index.html` |
-| JSON-LD（WebApplication + Organization） | `web/index.html` |
+| `theme-color` / `color-scheme` | `web/index.html` |
+| Schema.org itemprop | `web/index.html` |
+| JSON-LD（WebApplication + Organization + FAQPage） | `web/index.html` |
+| `noscript` 静态正文兜底 | `web/index.html`（弱化 SPA 对百度等爬虫不友好问题） |
 | 路由级动态 head | `web/src/composables/useSeo.js` + `web/src/router/index.js` |
 | `/summary` | `noindex, follow`（不进 sitemap） |
 | `robots.txt` / `sitemap.xml` | `web/public/` |
 | 分享图 / Apple 图标 / favicon | `web/public/og-image.png`、`apple-touch-icon.png`、`favicon.svg` |
+| Footer 关键词内链 | `web/src/components/AppFooter.vue` |
+| 语义化区块（H1/H2、aria-labelledby、nav aria-label、封面 alt） | `HeroSection` / 各 Section / `AppHeader` / `HistoryPanel` 等 |
 
 ## 2. 换正式域名（全局替换）
 
 将下列文件中的 **`https://saveany.cc`** 替换为真实域名（勿漏尾部路径一致性）：
 
-1. `web/index.html`（canonical、og:url、og:image、twitter:image、itemprop、JSON-LD 等约 10 处）
+1. `web/index.html`（canonical、og:url、og:image、twitter:image、itemprop、JSON-LD、noscript 内链等）
 2. `web/public/robots.txt`（`Sitemap:` 行）
 3. `web/public/sitemap.xml`（所有 `<loc>`）
 4. `web/src/composables/useSeo.js`（常量 `SITE_ORIGIN`）
@@ -46,7 +51,10 @@
 - [Bing Webmaster Tools](https://www.bing.com/webmasters)
 - [360 搜索资源平台](https://zhanzhang.so.com/) 及其他需要的国内站长平台
 
+可用 [Google Rich Results Test](https://search.google.com/test/rich-results) 校验 FAQ / WebApplication 结构化数据。
+
 ## 5. 已知局限
 
-- 纯 SPA：百度等对 JS 渲染支持有限；若收录差，可另立项做预渲染 / SSR。
+- 纯 SPA：百度等对 JS 渲染支持有限；`noscript` 提供基础可读正文，深度收录仍可能需要预渲染 / SSR。
 - `/summary` 依赖本地会话，故意不收录，避免薄内容与重复页。
+- `keywords` meta 对 Google 权重极低，主要为国内引擎与站内约定保留。

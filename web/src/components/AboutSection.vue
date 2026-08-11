@@ -1,6 +1,6 @@
 <template>
-  <section class="section about" id="about">
-    <h2 class="section-title">关于与声明</h2>
+  <section class="section about" id="about" aria-labelledby="about-heading">
+    <h2 id="about-heading" class="section-title">关于与声明</h2>
     <div class="about-box">
       <p>
         <strong>速下 SpeedyDL</strong> 是学习项目：后端基于开源

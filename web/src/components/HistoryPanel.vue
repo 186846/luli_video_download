@@ -41,13 +41,13 @@ function formatTime(ts) {
     <ul v-else class="history-list">
       <li v-for="item in history" :key="item.url + item.at" class="history-item">
         <button type="button" class="history-main" @click="emit('reuse', item)">
-          <img
-            v-if="historyThumb(item)"
-            class="history-thumb"
-            :src="historyThumb(item)"
-            alt=""
-            referrerpolicy="no-referrer"
-          />
+            <img
+              v-if="historyThumb(item)"
+              class="history-thumb"
+              :src="historyThumb(item)"
+              :alt="item.title ? `${item.title} 封面` : '视频封面'"
+              referrerpolicy="no-referrer"
+            />
           <span v-else class="history-thumb history-thumb--empty" />
           <span class="history-meta">
             <span class="history-title">{{ item.title }}</span>

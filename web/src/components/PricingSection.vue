@@ -7,8 +7,8 @@ const emit = defineEmits(['open-vip'])
 </script>
 
 <template>
-  <section class="section pricing" id="pricing">
-    <h2 class="section-title">简单定价</h2>
+  <section class="section pricing" id="pricing" aria-labelledby="pricing-heading">
+    <h2 id="pricing-heading" class="section-title">简单定价</h2>
     <p class="section-sub">学习演示 · 不接真实支付 · 本地一键解锁体验会员权益</p>
     <div class="pricing-grid">
       <article class="price-card">
