@@ -1,7 +1,36 @@
+# SpeedyDL — 爬虫规则（SEO + GEO）
+# 正式域名替换时请同步改 Sitemap 行
+
 User-agent: *
 Allow: /
-
-# 会话态动态页，不建议收录
 Disallow: /summary
+
+# AI / 生成式引擎爬虫：显式放行，便于 GEO 引用
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Googlebot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Bytespider
+Allow: /
+
+User-agent: CCBot
+Allow: /
 
 Sitemap: https://saveany.cc/sitemap.xml

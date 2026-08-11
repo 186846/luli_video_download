@@ -19,6 +19,12 @@ from app.douyin import (
     parse_douyin,
     resolve_douyin_direct,
 )
+from app.bilibili import (
+    download_bilibili,
+    is_bilibili_url,
+    parse_bilibili,
+    resolve_bilibili_direct,
+)
 
 
 # yt-dlp progress_hooks 回调类型
@@ -358,6 +364,9 @@ def parse_video(url: str) -> dict[str, Any]:
     # 抖音：yt-dlp 强依赖 Cookie；走分享页无 Cookie 方案
     if is_douyin_url(url):
         return parse_douyin(url)
+    # B 站：yt-dlp 抓网页易 412，改走官方 API
+    if is_bilibili_url(url):
+        return parse_bilibili(url)
 
     ydl_opts: dict[str, Any] = _base_ydl_opts(
         skip_download=True,
@@ -440,6 +449,8 @@ def download_video(
     """下载到 outdir，返回最终文件路径（合并后扩展名可能变为 mp4）。"""
     if is_douyin_url(url) or str(format_id or "").startswith("dy:"):
         return download_douyin(url, format_id, outdir, progress_hook=progress_hook)
+    if is_bilibili_url(url) or str(format_id or "").startswith("bili:"):
+        return download_bilibili(url, format_id, outdir, progress_hook=progress_hook)
 
     outdir.mkdir(parents=True, exist_ok=True)
     outtmpl = str(outdir / "%(title).80B [%(id)s].%(ext)s")
@@ -487,6 +498,14 @@ def format_requires_vip(format_id: str, height: int | None = None) -> bool:
     m_dy = re.search(r"dy:(\d+)p", fid, re.I)
     if m_dy and int(m_dy.group(1)) > FREE_MAX_HEIGHT:
         return True
+    # B 站 bili:qn:80 → 约 1080p
+    m_bili = re.search(r"bili:qn:(\d+)", fid, re.I)
+    if m_bili:
+        from app.bilibili import qn_to_height
+
+        h = qn_to_height(int(m_bili.group(1)))
+        if h and h > FREE_MAX_HEIGHT:
+            return True
     # 预设选择器如 height<=1080 也要识别
     m = re.search(r"height<=(\d+)", fid)
     if m and int(m.group(1)) > FREE_MAX_HEIGHT:
@@ -503,6 +522,8 @@ def resolve_direct_url(url: str, format_id: str) -> dict[str, Any]:
     """
     if is_douyin_url(url) or str(format_id or "").startswith("dy:"):
         return resolve_douyin_direct(url, format_id)
+    if is_bilibili_url(url) or str(format_id or "").startswith("bili:"):
+        return resolve_bilibili_direct(url, format_id)
 
     fid = (format_id or "").strip()
     if not fid:

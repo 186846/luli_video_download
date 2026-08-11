@@ -24,7 +24,8 @@ _AV_RE = re.compile(r"(?:/av|aid=)(\d+)", re.I)
 
 _UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/131.0.0.0 Safari/537.36"
 )
 
 
@@ -62,6 +63,7 @@ def _headers(*, page_url: str | None = None) -> dict[str, str]:
     h = {
         "User-Agent": _UA,
         "Referer": page_url or "https://www.bilibili.com/",
+        "Origin": "https://www.bilibili.com",
         "Accept": "application/json,text/plain,*/*",
     }
     if BILI_SESSDATA:
@@ -133,6 +135,9 @@ def fetch_view(
         "title": data.get("title"),
         "desc": data.get("desc"),
         "duration": data.get("duration"),
+        "pic": data.get("pic"),
+        "owner": data.get("owner") or {},
+        "stat": data.get("stat") or {},
         "pages": pages,
     }
     return out

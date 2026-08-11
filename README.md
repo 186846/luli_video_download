@@ -14,7 +14,8 @@
 | [docs/方案设计.md](docs/方案设计.md) | 架构、模块职责、核心流程、扩展指引 |
 | [docs/API.md](docs/API.md) | HTTP 接口契约与示例 |
 | [docs/部署文档.md](docs/部署文档.md) | 开发联调、构建、Nginx/Caddy 同源反代与运维要点 |
-| [docs/SEO说明.md](docs/SEO说明.md) | 前端 SEO、换域名、站长平台提交清单 |
+| [docs/SEO说明.md](docs/SEO说明.md) | 前端 SEO / GEO、换域名、站长平台与 AI 抽检清单 |
+| [docs/GEO优化入门指南.md](docs/GEO优化入门指南.md) | 生成式引擎优化要点与本站已落地项 |
 | [docs/项目总结.md](docs/项目总结.md) | 主功能完成后的能力清单、决策与限制 |
 | [docs/AI视频总结方案.md](docs/AI视频总结方案.md) | AI 总结范围、流程、API 与验收 |
 | [docs/思维导图增强方案.md](docs/思维导图增强方案.md) | 页内全屏与 PNG / FreeMind / OPML 导出 |
@@ -24,7 +25,8 @@
 
 - **前端** `web/`：Vue 3 + Vite（`http://127.0.0.1:5173`，代理 `/api`）；`api/` 分域、`components/` 区块化、`HomeView` 只做编排
 - **后端** `app/`：FastAPI（本地默认 `http://127.0.0.1:8001`，自带 `/docs`）
-- **布局**：解析结果 / 平台介绍在左，最近解析侧栏在右；定价与关于填在左侧主栏
+- **布局**：解析结果 / 平台介绍在左，最近解析侧栏在右；定价、常见问题与关于填在左侧主栏
+- **GEO**：`/llms.txt`、AI 爬虫 Allow、首页 `#faq`、FAQ/HowTo JSON-LD（详见 [SEO说明](docs/SEO说明.md)）
 - **下载模式①**：服务端落盘后提供 `/api/files/{id}`
 - **直链模式②**：`/api/direct` 返回单流直链（合并清晰度不可用）
 - **字幕**：解析仍返回字幕轨（含 B 站官方 CC/AI）；首页不再单独下载，字幕/弹幕在总结页导出 TXT / SRT / VTT

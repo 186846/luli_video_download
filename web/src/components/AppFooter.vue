@@ -17,8 +17,10 @@
       <p class="footer-seo__links">
         <a href="/#download">开始解析</a>
         <a href="/#pricing">简单定价</a>
+        <a href="/#faq">常见问题</a>
         <a href="/#about">关于与声明</a>
         <a href="/#history">最近解析</a>
+        <a href="/llms.txt">llms.txt</a>
       </p>
     </nav>
     <p class="footer-copy">© SpeedyDL · 仅供个人学习 · 请尊重版权</p>

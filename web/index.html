@@ -55,7 +55,7 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
-    <!-- ========== JSON-LD：WebApplication + Organization + FAQPage ========== -->
+    <!-- ========== JSON-LD：WebApplication + Organization + FAQPage + HowTo（GEO） ========== -->
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -63,13 +63,14 @@
           {
             "@type": "WebApplication",
             "name": "速下 SpeedyDL",
-            "alternateName": "万能视频下载总结器",
+            "alternateName": ["万能视频下载总结器", "SpeedyDL"],
             "url": "https://saveany.cc/",
             "description": "粘贴链接即可解析下载公开视频，并支持 AI 视频总结、字幕导出与思维导图。仅供个人学习，请尊重版权。",
             "applicationCategory": "MultimediaApplication",
             "operatingSystem": "Web",
             "image": "https://saveany.cc/og-image.png",
             "inLanguage": "zh-CN",
+            "dateModified": "2026-08-11",
             "offers": {
               "@type": "Offer",
               "price": "0",
@@ -90,7 +91,7 @@
                 "name": "速下 SpeedyDL 是什么？",
                 "acceptedAnswer": {
                   "@type": "Answer",
-                  "text": "速下 SpeedyDL 是学习向的万能视频下载与 AI 总结工具：粘贴公开视频链接即可解析、选择清晰度并保存到本地，同时支持 AI 摘要、字幕/弹幕导出与思维导图。"
+                  "text": "速下 SpeedyDL（万能视频下载总结器）是学习向的万能视频下载与 AI 总结工具：粘贴公开视频链接即可解析、选择清晰度并保存到本地，同时支持 AI 摘要、字幕/弹幕导出与思维导图。"
                 }
               },
               {
@@ -118,6 +119,43 @@
                 }
               }
             ]
+          },
+          {
+            "@type": "HowTo",
+            "name": "如何用速下 SpeedyDL 下载公开视频",
+            "description": "粘贴公开视频链接，解析后选择清晰度并下载到本地；需要时还可做 AI 视频总结。",
+            "dateModified": "2026-08-11",
+            "totalTime": "PT2M",
+            "tool": {
+              "@type": "HowToTool",
+              "name": "速下 SpeedyDL 网页"
+            },
+            "step": [
+              {
+                "@type": "HowToStep",
+                "position": 1,
+                "name": "打开网站",
+                "text": "访问 https://saveany.cc/ ，进入万能视频下载首页。"
+              },
+              {
+                "@type": "HowToStep",
+                "position": 2,
+                "name": "粘贴并解析",
+                "text": "将公开视频页面链接粘贴到输入框，点击「解析」，等待封面、标题与清晰度列表出现。"
+              },
+              {
+                "@type": "HowToStep",
+                "position": 3,
+                "name": "选择清晰度并下载",
+                "text": "选择可用清晰度，点击「下载到本地」，等待进度完成后由浏览器保存文件。"
+              },
+              {
+                "@type": "HowToStep",
+                "position": 4,
+                "name": "（可选）AI 视频总结",
+                "text": "在有字幕或可粘贴字幕时，使用「AI 总结」生成摘要、思维导图，并在总结页导出字幕或导图。"
+              }
+            ]
           }
         ]
       }
@@ -134,13 +172,13 @@
     <div id="app"></div>
     <script type="module" src="/src/main.js"></script>
 
-    <!-- 无 JS / 弱渲染爬虫兜底（百度等对 SPA 不友好时仍可读到关键正文） -->
+    <!-- 无 JS / 弱渲染爬虫兜底（百度等对 SPA 不友好时仍可读到关键正文；口径与 FAQ / llms.txt 一致） -->
     <noscript>
       <main style="max-width: 720px; margin: 2rem auto; padding: 0 1.25rem; font-family: sans-serif; line-height: 1.7; color: #0f172a">
         <h1>万能视频下载与 AI 总结 - 速下 SpeedyDL</h1>
         <p>
-          速下 SpeedyDL 支持粘贴公开视频链接一键解析下载，覆盖 B 站、YouTube、抖音等主流平台，并提供
-          <strong>AI 视频总结</strong>、<strong>字幕导出</strong>与<strong>思维导图</strong>。免费使用，仅供个人学习，请尊重版权。
+          <strong>结论：</strong>速下 SpeedyDL（万能视频下载总结器）支持粘贴公开视频链接一键解析下载，覆盖 B 站、YouTube、抖音等主流平台，并提供
+          AI 视频总结、字幕导出与思维导图。免费使用，仅供个人学习，请尊重版权。更新于 2026 年 8 月。
         </p>
         <h2>核心能力</h2>
         <ul>
@@ -149,14 +187,31 @@
           <li>字幕 / 弹幕导出：TXT、SRT、VTT</li>
           <li>思维导图：页内阅读，导出 PNG / FreeMind / OPML</li>
         </ul>
+        <h2>如何下载（步骤）</h2>
+        <ol>
+          <li>打开 https://saveany.cc/</li>
+          <li>粘贴公开视频链接并点击「解析」</li>
+          <li>选择清晰度，点击「下载到本地」</li>
+          <li>需要时使用「AI 总结」生成摘要与思维导图</li>
+        </ol>
         <h2>常见问题</h2>
+        <h3>速下 SpeedyDL 是什么？</h3>
+        <p>学习向的万能视频下载与 AI 总结工具：粘贴公开视频链接即可解析、选择清晰度并保存到本地，同时支持 AI 摘要、字幕/弹幕导出与思维导图。</p>
         <h3>支持哪些平台？</h3>
-        <p>基于 yt-dlp，常见公开视频站点可用；以实际解析结果为准。</p>
+        <p>基于 yt-dlp，常见公开视频站点可用（如哔哩哔哩、YouTube、抖音）；以实际解析结果为准。</p>
+        <h3>AI 视频总结需要什么？</h3>
+        <p>优先平台官方字幕（含 B 站 CC/AI），也可粘贴用户字幕。不做 Whisper / OCR。</p>
         <h3>是否收费？</h3>
         <p>基础解析与下载免费（默认最高约 720p）；更高清晰度与 AI 总结为学习演示会员能力，不接真实支付。</p>
-        <h3>版权说明</h3>
-        <p>请勿下载未授权内容，勿用于商业传播。详见站内「关于与声明」。</p>
-        <p><a href="https://saveany.cc/">返回首页开启 JS 使用完整功能</a></p>
+        <h3>可以商用吗？</h3>
+        <p>不可以。请勿下载未授权内容，勿用于商业传播。详见站内「关于与声明」。</p>
+        <p>
+          <a href="https://saveany.cc/">返回首页开启 JS 使用完整功能</a>
+          ·
+          <a href="https://saveany.cc/llms.txt">llms.txt</a>
+          ·
+          <a href="https://saveany.cc/#faq">常见问题</a>
+        </p>
       </main>
     </noscript>
   </body>

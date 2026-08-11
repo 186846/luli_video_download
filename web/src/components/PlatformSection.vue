@@ -1,94 +1,67 @@
 <template>
   <section class="section platforms" id="platforms-section" aria-labelledby="platforms-heading">
-    <h2 id="platforms-heading" class="section-title">支持主流平台</h2>
-    <p class="section-sub">站在 yt-dlp 肩膀上，覆盖海量站点（以公开可访问内容为准）</p>
-    <div class="card-grid">
-      <article class="card platform-card">
-        <div class="card-visual card-visual--bili" aria-hidden="true">
-          <span class="card-visual__glow" />
-          <span class="card-visual__ring" />
-          <svg class="card-icon" viewBox="0 0 64 64" fill="none">
-            <rect x="8" y="18" width="48" height="32" rx="8" fill="#fff" fill-opacity="0.95" />
-            <path d="M20 14l6 6M44 14l-6 6" stroke="#fff" stroke-width="3.5" stroke-linecap="round" />
-            <circle cx="26" cy="34" r="4" fill="#00A1D6" />
-            <circle cx="38" cy="34" r="4" fill="#00A1D6" />
-            <path d="M24 42h16" stroke="#00A1D6" stroke-width="3" stroke-linecap="round" />
+    <h2 id="platforms-heading" class="section-title platforms-title">
+      为什么选择 <span class="platforms-brand">SpeedyDL</span> 视频下载器
+    </h2>
+    <p class="section-sub">简单、快速、强大的在线视频下载体验，支持 AI 智能总结</p>
+    <div class="feature-grid">
+      <article class="feature-card">
+        <div class="feature-icon feature-icon--platforms" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M2 12h20" />
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
           </svg>
         </div>
-        <h3>哔哩哔哩</h3>
-        <p class="card-tags">学习 · UP主 · 公开稿件</p>
+        <h3>支持 1800+ 平台</h3>
+        <p>YouTube、Bilibili、抖音、TikTok、Twitter、Instagram 等全球主流平台</p>
       </article>
-      <article class="card platform-card">
-        <div class="card-visual card-visual--yt" aria-hidden="true">
-          <span class="card-visual__glow" />
-          <span class="card-visual__ring" />
-          <svg class="card-icon" viewBox="0 0 64 64" fill="none">
-            <rect x="6" y="16" width="52" height="32" rx="12" fill="#fff" fill-opacity="0.96" />
-            <path d="M28 26v12l12-6-12-6z" fill="#FF0000" />
+
+      <article class="feature-card">
+        <div class="feature-icon feature-icon--speed" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
           </svg>
         </div>
-        <h3>YouTube</h3>
-        <p class="card-tags">国际 · 高清 · 公开视频</p>
+        <h3>极速解析下载</h3>
+        <p>智能解析视频链接，自动匹配最优下载方式，速度快人一步</p>
       </article>
-      <article class="card platform-card">
-        <div class="card-visual card-visual--dy" aria-hidden="true">
-          <span class="card-visual__glow" />
-          <span class="card-visual__ring" />
-          <svg class="card-icon" viewBox="0 0 64 64" fill="none">
-            <rect x="20" y="8" width="24" height="48" rx="6" fill="#fff" fill-opacity="0.95" />
-            <rect x="24" y="14" width="16" height="28" rx="2" fill="#111" />
-            <circle cx="32" cy="48" r="2.5" fill="#111" />
-            <path
-              d="M34 22c2 0 4-1.5 4-4M34 22v10a4 4 0 11-2-3.5"
-              stroke="#25F4EE"
-              stroke-width="2.2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-            <path
-              d="M34 22c2 0 4-1.5 4-4M34 22v10a4 4 0 11-2-3.5"
-              stroke="#FE2C55"
-              stroke-width="2.2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              transform="translate(1.2 0.8)"
-              opacity="0.85"
-            />
+
+      <article class="feature-card">
+        <div class="feature-icon feature-icon--mobile" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+            <path d="M12 18h.01" />
           </svg>
         </div>
-        <h3>短视频</h3>
-        <p class="card-tags">抖音 / TikTok · 无水印尝试</p>
+        <h3>手机也能用</h3>
+        <p>完美适配手机浏览器，随时随地，想下就下，无需安装任何 App</p>
       </article>
-      <article class="card platform-card">
-        <div class="card-visual card-visual--more" aria-hidden="true">
-          <span class="card-visual__glow" />
-          <span class="card-visual__ring" />
-          <svg class="card-icon card-icon--wide" viewBox="0 0 72 64" fill="none">
-            <circle cx="36" cy="32" r="18" stroke="#fff" stroke-opacity="0.35" stroke-width="2" />
-            <circle cx="36" cy="32" r="8" fill="#fff" fill-opacity="0.95" />
-            <circle cx="18" cy="18" r="4" fill="#fff" fill-opacity="0.9" />
-            <circle cx="54" cy="16" r="3.5" fill="#fff" fill-opacity="0.85" />
-            <circle cx="56" cy="42" r="4.5" fill="#fff" fill-opacity="0.9" />
-            <circle cx="16" cy="44" r="3" fill="#fff" fill-opacity="0.8" />
-            <path
-              d="M22 20l10 8M50 18l-10 10M52 40l-10-6M20 42l12-6"
-              stroke="#fff"
-              stroke-opacity="0.55"
-              stroke-width="1.6"
-            />
-            <text
-              x="36"
-              y="36"
-              text-anchor="middle"
-              fill="#1777FF"
-              font-size="9"
-              font-weight="800"
-              font-family="Sora, sans-serif"
-            >1k+</text>
+
+      <article class="feature-card">
+        <div class="feature-icon feature-icon--quality" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 6h16v12H4z" />
+            <path d="M8 2l2 4M16 2l-2 4" />
+            <path d="M10 10h4v4h-4z" />
           </svg>
         </div>
-        <h3>更多站点</h3>
-        <p class="card-tags">yt-dlp · 持续更新</p>
+        <h3>多种清晰度</h3>
+        <p>支持从 360p 到 4K 多种清晰度选择，满足不同场景需求</p>
+      </article>
+
+      <article class="feature-card">
+        <div class="feature-icon feature-icon--ai" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="5" y="8" width="14" height="12" rx="3" />
+            <path d="M9 8V6a3 3 0 0 1 6 0v2" />
+            <circle cx="9.5" cy="14" r="1" fill="currentColor" stroke="none" />
+            <circle cx="14.5" cy="14" r="1" fill="currentColor" stroke="none" />
+            <path d="M9 17h6" />
+          </svg>
+        </div>
+        <h3>AI 视频总结</h3>
+        <p>AI 智能分析视频内容，一键生成摘要、思维导图，还能针对视频提问</p>
       </article>
     </div>
   </section>

@@ -25,6 +25,7 @@ import VideoResult from '../components/VideoResult.vue'
 import PlatformSection from '../components/PlatformSection.vue'
 import PricingSection from '../components/PricingSection.vue'
 import AboutSection from '../components/AboutSection.vue'
+import FaqSection from '../components/FaqSection.vue'
 import HistoryPanel from '../components/HistoryPanel.vue'
 import AuthModal from '../components/AuthModal.vue'
 
@@ -475,6 +476,7 @@ onBeforeUnmount(() => {
 
         <PlatformSection v-show="!video" />
         <PricingSection :is-vip="isVip" @open-vip="openVipModal" />
+        <FaqSection />
         <AboutSection />
       </div>
 
