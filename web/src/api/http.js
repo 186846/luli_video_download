@@ -1,11 +1,17 @@
 /**
  * 通用 HTTP / SSE 工具。业务接口见 video.js / summarize.js。
+ * credentials: 'include' 以携带登录 Cookie。
  */
 
 export async function request(path, options = {}) {
+  const headers = { ...(options.headers || {}) }
+  if (options.body != null && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json'
+  }
   const res = await fetch(path, {
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    credentials: 'include',
     ...options,
+    headers,
   })
   const json = await res.json().catch(() => ({}))
   if (!res.ok) {

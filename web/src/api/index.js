@@ -15,5 +15,17 @@ export {
   askAboutVideo,
   streamChat,
 } from './summarize'
-export { VIP_TOKEN, vipPayload } from './auth'
-export { demoMembershipPlan } from './payment'
+export {
+  VIP_TOKEN,
+  vipPayload,
+  register,
+  login,
+  logout,
+  fetchMe,
+} from './auth'
+export {
+  createCheckout,
+  getBillingSessionStatus,
+  membershipPlan,
+  VIP_PRICE_USD,
+} from './payment'

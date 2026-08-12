@@ -1,10 +1,8 @@
 """
-B 站解析/下载旁路：不走 yt-dlp 抓网页（易 412），改用官方 API。
+B 站解析/下载旁路（官方 API）：作为 yt-dlp 失败时的兜底。
 
-- 列表：playurl + fnval=16 + try_look=1，可列出 1080p+（演示会员解锁）
-- ≤720p：优先 fnval=0 合成 MP4 单流下载
-- >720p：DASH 音视频 + ffmpeg 合并
-可选 SPEEDYDL_BILI_SESSDATA 提升稳定可用清晰度。
+主路径已改为 yt-dlp（wbi 签名，通常无需 SESSDATA）。
+可选 SPEEDYDL_BILI_SESSDATA 仅提升官方 API 兜底时的成功率/清晰度。
 """
 
 from __future__ import annotations

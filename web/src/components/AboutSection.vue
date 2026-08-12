@@ -16,7 +16,7 @@
         <ul>
           <li>仅供个人学习</li>
           <li>公开可访问内容</li>
-          <li>不接真实支付</li>
+          <li>Stripe 会员支付</li>
         </ul>
       </aside>
     </div>

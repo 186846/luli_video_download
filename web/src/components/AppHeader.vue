@@ -1,9 +1,11 @@
 <script setup>
 defineProps({
   isVip: { type: Boolean, default: false },
+  isLoggedIn: { type: Boolean, default: false },
+  email: { type: String, default: '' },
 })
 
-const emit = defineEmits(['vip-click'])
+const emit = defineEmits(['vip-click', 'account-click'])
 </script>
 
 <template>
@@ -25,14 +27,33 @@ const emit = defineEmits(['vip-click'])
         <a href="#pricing">定价</a>
         <a href="#about">关于</a>
       </nav>
-      <button
-        type="button"
-        class="btn btn-ghost btn-sm"
-        :class="{ 'is-vip': isVip }"
-        @click="emit('vip-click')"
-      >
-        {{ isVip ? '演示会员已开通' : '演示会员' }}
-      </button>
+      <div class="header-actions">
+        <button
+          v-if="isLoggedIn"
+          type="button"
+          class="btn btn-ghost btn-sm"
+          :title="email"
+          @click="emit('account-click')"
+        >
+          {{ isVip ? '会员' : '账号' }}
+        </button>
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm"
+          :class="{ 'is-vip': isVip }"
+          @click="emit('vip-click')"
+        >
+          {{ isVip ? '永久会员' : '开通会员' }}
+        </button>
+      </div>
     </div>
   </header>
 </template>
+
+<style scoped>
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+</style>

@@ -3,7 +3,7 @@
  * 首页：组装 Header / Hero / 结果 / 平台 / 定价 / 历史等区块。
  * 业务状态留在本页；展示拆到 components/。
  */
-import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   fileUrl,
@@ -16,7 +16,7 @@ import {
   thumbnailUrl,
 } from '../api'
 import { useHistory } from '../composables/useHistory'
-import { useVip, VIP_TOKEN } from '../composables/useVip'
+import { useAuth } from '../composables/useAuth'
 import { saveSummarySession } from '../composables/useSummarySession'
 import AppHeader from '../components/AppHeader.vue'
 import AppFooter from '../components/AppFooter.vue'
@@ -30,7 +30,22 @@ import HistoryPanel from '../components/HistoryPanel.vue'
 import AuthModal from '../components/AuthModal.vue'
 
 const router = useRouter()
-const { isVip, setVip, toggleVipPrompt } = useVip()
+const {
+  isVip,
+  isLoggedIn,
+  email,
+  aiRemaining,
+  aiDailyLimit,
+  canSummarize,
+  hydrate,
+  register,
+  login,
+  logout,
+  refreshMe,
+  applyQuotaFromResponse,
+  startCheckout,
+  pollVipAfterBilling,
+} = useAuth()
 const { history, addHistory, removeHistory, clearHistory } = useHistory()
 
 const urlInput = ref('')
@@ -41,6 +56,10 @@ const video = ref(null)
 const selectedFormat = ref(null)
 const selectedSubKey = ref('')
 const showVipModal = ref(false)
+const authBusy = ref(false)
+const authError = ref('')
+const authIntent = ref('upgrade') // login | upgrade
+const quotaHint = ref('')
 const progressVisible = ref(false)
 const progress = ref(0)
 const progressText = ref('')
@@ -101,22 +120,73 @@ function setStatus(msg, type = '') {
   statusType.value = type
 }
 
-function openVipModal() {
+function openVipModal(intent = 'upgrade', hint = '') {
+  if (typeof intent !== 'string') intent = 'upgrade'
+  if (typeof hint !== 'string') hint = ''
+  authIntent.value = intent
+  quotaHint.value = hint
+  authError.value = ''
   showVipModal.value = true
 }
 
 function closeVipModal() {
   showVipModal.value = false
+  authError.value = ''
+  quotaHint.value = ''
 }
 
-function confirmVip() {
-  setVip(true)
+async function onAuthLogin({ email: e, password }) {
+  authBusy.value = true
+  authError.value = ''
+  try {
+    await login(e, password)
+    setStatus('登录成功', 'ok')
+    // 登录后若仍是为 AI 而来且有配额，关掉弹窗让用户再点总结
+    if (authIntent.value === 'login' && canSummarize.value) {
+      closeVipModal()
+    }
+  } catch (err) {
+    authError.value = err.message || String(err)
+  } finally {
+    authBusy.value = false
+  }
+}
+
+async function onAuthRegister({ email: e, password }) {
+  authBusy.value = true
+  authError.value = ''
+  try {
+    await register(e, password)
+    setStatus('注册成功，免费账号每天可 AI 总结 3 次', 'ok')
+    if (authIntent.value === 'login') {
+      closeVipModal()
+    }
+  } catch (err) {
+    authError.value = err.message || String(err)
+  } finally {
+    authBusy.value = false
+  }
+}
+
+async function onCheckout() {
+  authBusy.value = true
+  authError.value = ''
+  try {
+    await startCheckout()
+  } catch (err) {
+    authError.value = err.message || String(err)
+    authBusy.value = false
+  }
+}
+
+async function onLogout() {
+  await logout()
   closeVipModal()
-  setStatus('演示会员已开通，可选择 1080p+ 清晰度', 'ok')
+  setStatus('已退出登录', 'ok')
 }
 
 function onHeaderVipClick() {
-  if (toggleVipPrompt()) openVipModal()
+  openVipModal()
 }
 
 function isLocked(fmt) {
@@ -254,7 +324,6 @@ async function onDownload() {
       url: video.value.original_url || video.value.webpage_url,
       format_id: fmt.format_id,
       height: fmt.height || null,
-      vip_token: isVip.value ? VIP_TOKEN : null,
     })
     pollTask(json.task.id)
   } catch (err) {
@@ -282,7 +351,6 @@ async function onDirect() {
       url: video.value.original_url || video.value.webpage_url,
       format_id: fmt.format_id,
       height: fmt.height || null,
-      vip_token: isVip.value ? VIP_TOKEN : null,
     })
     const link = json.data.url
     try {
@@ -300,8 +368,15 @@ async function onDirect() {
 
 async function onSummarize() {
   if (!video.value) return
-  if (!isVip.value) {
-    openVipModal()
+  if (!isLoggedIn.value) {
+    openVipModal('login')
+    return
+  }
+  if (!canSummarize.value) {
+    openVipModal(
+      'upgrade',
+      `今日免费 AI 总结已用完（${aiDailyLimit.value} 次/天），升级会员可无限使用`,
+    )
     return
   }
   summarizing.value = true
@@ -317,15 +392,20 @@ async function onSummarize() {
   const url = video.value.original_url || video.value.webpage_url
 
   try {
-    const { task_id } = await startSummarize({
+    const result = await startSummarize({
       url,
       lang: sub?.lang || null,
       automatic: sub ? Boolean(sub.automatic) : null,
-      vip_token: VIP_TOKEN,
       title: video.value.title || null,
       subtitle_text: userSubtitleText.value.trim() || null,
     })
-    setStatus('AI 总结任务已创建，正在处理…', 'ok')
+    const { task_id, quota } = result
+    applyQuotaFromResponse(quota)
+    const left =
+      isVip.value || quota?.remaining == null
+        ? '会员不限次数'
+        : `今日剩余 ${quota.remaining} 次`
+    setStatus(`AI 总结任务已创建（${left}），正在处理…`, 'ok')
     summaryAbort = new AbortController()
 
     await streamSummaryStatus(task_id, {
@@ -353,7 +433,6 @@ async function onSummarize() {
             lang: sub?.lang || null,
             automatic: sub ? Boolean(sub.automatic) : null,
             title: video.value.title || null,
-            vip_token: VIP_TOKEN,
           },
         })
         setStatus(task.data?.mode === 'mock' ? '演示总结完成' : 'AI 总结完成', 'ok')
@@ -365,6 +444,7 @@ async function onSummarize() {
         summaryError.value = errMsg || '总结失败'
         summaryProgressText.value = summaryError.value
         setStatus(summaryError.value, 'error')
+        refreshMe()
       },
     })
   } catch (err) {
@@ -374,6 +454,12 @@ async function onSummarize() {
     summaryError.value = err.message || String(err)
     summaryProgressText.value = summaryError.value
     setStatus(summaryError.value, 'error')
+    const msg = String(err.message || '')
+    if (msg.includes('登录')) openVipModal('login')
+    else if (msg.includes('用完') || msg.includes('升级')) {
+      openVipModal('upgrade', msg)
+    }
+    refreshMe()
   }
 }
 
@@ -421,6 +507,35 @@ function pollTask(taskId) {
   pollTimer = setInterval(tick, 800)
 }
 
+async function handleBillingReturn() {
+  const params = new URLSearchParams(window.location.search)
+  const billing = params.get('billing')
+  if (!billing) return
+  const sessionId = params.get('session_id')
+  const clean = () => {
+    const url = new URL(window.location.href)
+    url.searchParams.delete('billing')
+    url.searchParams.delete('session_id')
+    window.history.replaceState({}, '', url.pathname + url.search + url.hash)
+  }
+  if (billing === 'cancel') {
+    setStatus('已取消支付', 'error')
+    clean()
+    return
+  }
+  if (billing === 'success') {
+    setStatus('支付处理中，正在确认会员状态…', 'ok')
+    const ok = await pollVipAfterBilling(sessionId)
+    setStatus(ok ? '会员开通成功，可使用 1080p+ 与 AI 总结' : '支付已提交，若权益未到账请稍候刷新', ok ? 'ok' : 'error')
+    clean()
+  }
+}
+
+onMounted(async () => {
+  await hydrate()
+  await handleBillingReturn()
+})
+
 onBeforeUnmount(() => {
   if (pollTimer) clearInterval(pollTimer)
   if (summaryAbort) {
@@ -431,7 +546,13 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <AppHeader :is-vip="isVip" @vip-click="onHeaderVipClick" />
+  <AppHeader
+    :is-vip="isVip"
+    :is-logged-in="isLoggedIn"
+    :email="email"
+    @vip-click="onHeaderVipClick"
+    @account-click="openVipModal"
+  />
 
   <main>
     <HeroSection
@@ -490,5 +611,19 @@ onBeforeUnmount(() => {
   </main>
 
   <AppFooter />
-  <AuthModal :open="showVipModal" @close="closeVipModal" @confirm="confirmVip" />
+  <AuthModal
+    :open="showVipModal"
+    :is-logged-in="isLoggedIn"
+    :is-vip="isVip"
+    :email="email"
+    :busy="authBusy"
+    :error="authError"
+    :intent="authIntent"
+    :quota-hint="quotaHint"
+    @close="closeVipModal"
+    @login="onAuthLogin"
+    @register="onAuthRegister"
+    @checkout="onCheckout"
+    @logout="onLogout"
+  />
 </template>

@@ -8,7 +8,7 @@ import { streamChat, thumbnailUrl } from '../api'
 import MindMapCanvas from '../components/MindMapCanvas.vue'
 import { applySeo, SUMMARY_DEFAULT_SEO } from '../composables/useSeo'
 import { loadSummarySession, saveSummarySession } from '../composables/useSummarySession'
-import { useVip } from '../composables/useVip'
+import { useAuth } from '../composables/useAuth'
 import {
   buildEmbedUrlFromPlayer,
   formatTimestampForDisplay,
@@ -18,7 +18,7 @@ import {
 import { downloadMarkdown, downloadSrt, downloadTxt, downloadVtt } from '../utils/exportFile'
 
 const router = useRouter()
-const { isVip } = useVip()
+const { isVip, isLoggedIn, hydrate } = useAuth()
 
 const data = ref(null)
 // summary | subtitles(字幕文本) | transcript(弹幕列表) | mindmap | ask
@@ -54,6 +54,7 @@ const playerError = ref('')
 const currentMatchIndex = ref(0)
 
 onMounted(async () => {
+  await hydrate()
   const saved = loadSummarySession()
   if (!saved) {
     router.replace({ name: 'home' })
@@ -521,8 +522,8 @@ function onExportDocPointer(e) {
 async function onAsk() {
   const q = question.value.trim()
   if (!q || !data.value?.ask || asking.value) return
-  if (!isVip.value) {
-    askError.value = '请先在首页开通演示会员'
+  if (!isLoggedIn.value) {
+    askError.value = '请先在首页登录后再提问'
     return
   }
   asking.value = true

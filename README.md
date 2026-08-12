@@ -19,6 +19,7 @@
 | [docs/项目总结.md](docs/项目总结.md) | 主功能完成后的能力清单、决策与限制 |
 | [docs/AI视频总结方案.md](docs/AI视频总结方案.md) | AI 总结范围、流程、API 与验收 |
 | [docs/思维导图增强方案.md](docs/思维导图增强方案.md) | 页内全屏与 PNG / FreeMind / OPML 导出 |
+| [docs/Stripe会员接入.md](docs/Stripe会员接入.md) | 账号 + Stripe Checkout 配置与 CLI 本地测 Webhook |
 | [docs/竞品调研-AI视频总结.md](docs/竞品调研-AI视频总结.md) | BibiGPT / NoteGPT 调研与边界结论 |
 
 ## 架构
@@ -35,6 +36,7 @@
 - **文本来源**：B 站官方 CC/AI → yt-dlp → 用户粘贴/上传 → 弹幕 → 标题/简介（不做 Whisper / OCR）
 - **章节大纲**：按字幕时间轴 / 片长均分锚点，避免长视频章节挤在片头
 - **历史**：浏览器 localStorage，最多 20 条
+- **账号 / 会员**：邮箱密码登录（SQLite）；Stripe Checkout 一次性 $9.90 USD 开通永久 VIP（Webhook 履约）；详见 [Stripe会员接入](docs/Stripe会员接入.md)
 
 ## 环境
 

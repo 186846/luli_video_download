@@ -12,7 +12,7 @@ load_dotenv(BASE_DIR / ".env")
 # yt-dlp 下载产物与字幕临时文件目录（定时清理）
 DOWNLOAD_DIR = BASE_DIR / "downloads" / "tmp"
 
-# 免费档最高清晰度；超过则前端门禁 + 后端校验，需 vip_token=demo-vip
+# 免费档最高清晰度；超过则前端门禁 + 后端校验（登录 VIP；或 ALLOW_DEMO_VIP 时 demo-vip）
 FREE_MAX_HEIGHT = 720
 
 # 同时进行的下载任务上限，防止打满磁盘/带宽
@@ -46,6 +46,34 @@ BILI_SUBS_ENABLED = (os.getenv("SPEEDYDL_BILI_SUBS_ENABLED") or "1").strip() not
     "False",
     "no",
 )
-# 可选：部分需登录字幕轨（need_login_subtitle）
+# 可选：部分需登录字幕轨（need_login_subtitle）；B 站主路径已走 yt-dlp，通常无需配置
 BILI_SESSDATA = (os.getenv("SPEEDYDL_BILI_SESSDATA") or "").strip()
+
+# —— 账号 / Stripe 会员 ——
+DATA_DIR = BASE_DIR / "data"
+DB_PATH = Path(os.getenv("SPEEDYDL_DB_PATH") or (DATA_DIR / "speedydl.db"))
+
+ALLOW_DEMO_VIP = (os.getenv("SPEEDYDL_ALLOW_DEMO_VIP") or "0").strip() not in (
+    "0",
+    "false",
+    "False",
+    "no",
+)
+
+STRIPE_SECRET_KEY = (os.getenv("SPEEDYDL_STRIPE_SECRET_KEY") or "").strip()
+STRIPE_WEBHOOK_SECRET = (os.getenv("SPEEDYDL_STRIPE_WEBHOOK_SECRET") or "").strip()
+STRIPE_PRICE_ID = (os.getenv("SPEEDYDL_STRIPE_PRICE_ID") or "").strip()
+PUBLIC_BASE_URL = (
+    os.getenv("SPEEDYDL_PUBLIC_BASE_URL") or "http://127.0.0.1:5173"
+).rstrip("/")
+API_PUBLIC_BASE_URL = (
+    os.getenv("SPEEDYDL_API_PUBLIC_BASE_URL") or "http://127.0.0.1:8001"
+).rstrip("/")
+
+VIP_PRICE_CENTS = 990
+VIP_CURRENCY = "usd"
+VIP_PRODUCT_NAME = "速下永久会员"
+
+# 免费登录用户每日 AI 总结次数；VIP 不限
+FREE_AI_SUMMARIZE_DAILY = int(os.getenv("SPEEDYDL_FREE_AI_SUMMARIZE_DAILY") or "3")
 

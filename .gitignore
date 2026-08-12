@@ -5,6 +5,8 @@ venv/
 .env
 downloads/tmp/*
 !downloads/tmp/.gitkeep
+data/*
+!data/.gitkeep
 .pytest_cache/
 *.egg-info/
 dist/

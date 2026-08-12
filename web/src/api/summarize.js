@@ -18,7 +18,10 @@ export function getSummaryStatus(taskId) {
  * onProgress(task) / onDone(task) / onError(errMsg, task?)
  */
 export async function streamSummaryStatus(taskId, { onProgress, onDone, onError, signal } = {}) {
-  const res = await fetch(`/api/summarize/stream/${taskId}`, { signal })
+  const res = await fetch(`/api/summarize/stream/${taskId}`, {
+    credentials: 'include',
+    signal,
+  })
   let finished = false
   await consumeSse(res, {
     signal,
@@ -52,6 +55,7 @@ export function askAboutVideo(payload) {
 export async function streamChat(payload, { onStatus, onToken, onDone, onError, signal } = {}) {
   const res = await fetch('/api/chat', {
     method: 'POST',
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
     signal,

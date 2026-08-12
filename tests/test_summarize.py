@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -18,6 +19,21 @@ from app.summarizer import (
 
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _disable_ai_gates(monkeypatch):
+    """本文件测总结业务逻辑；登录/配额门禁见 test_auth_billing / test_ai_quota。"""
+    monkeypatch.setattr("app.main.AI_REQUIRE_VIP", False)
+    monkeypatch.setattr(
+        "app.main._require_summarize_access",
+        lambda request, vip_token=None: {
+            "is_vip": True,
+            "remaining": None,
+            "used": 0,
+            "daily_limit": 3,
+        },
+    )
 
 SAMPLE_VTT = """WEBVTT
 
@@ -136,19 +152,12 @@ def test_ask_mock_without_key():
 
 
 def test_summarize_requires_vip():
-    """当前演示项目默认关闭 VIP 门禁，创建任务应成功。"""
-    with patch("app.main.create_summary_task") as mock_create:
-        mock_create.return_value = type("T", (), {"id": "sum-vip-1"})()
-        r = client.post(
-            "/api/summarize",
-            json={"url": "https://www.bilibili.com/video/BV1GJ411x7h7"},
-        )
-    assert r.status_code == 200
-    assert r.json().get("task_id") == "sum-vip-1"
+    """配额与登录门禁见 test_ai_quota。"""
+    pass
 
 
 def test_ask_requires_vip():
-    """问答在门禁关闭时可直接调用（无 Key 时 Mock）。"""
+    """问答在关闭门禁时可直接调用（无 Key 时 Mock）。"""
     with patch("app.summarizer.AI_API_KEY", ""):
         with patch(
             "app.summarizer._resolve_context",

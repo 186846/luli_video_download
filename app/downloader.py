@@ -2,10 +2,12 @@
 yt-dlp 薄封装：解析元数据、服务端下载、直链解析、字幕下载。
 
 约定：不修改 yt-dlp 源码，只通过 YoutubeDL 官方 API / 选项使用能力。
+B 站优先走 yt-dlp（wbi 签名，无需 SESSDATA）；失败再回退官方 API 旁路。
 """
 
 from __future__ import annotations
 
+import logging
 import re
 from pathlib import Path
 from typing import Any, Callable
@@ -25,6 +27,8 @@ from app.bilibili import (
     parse_bilibili,
     resolve_bilibili_direct,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # yt-dlp progress_hooks 回调类型
@@ -59,16 +63,119 @@ def _base_ydl_opts(**extra: Any) -> dict[str, Any]:
         "logger": _QuietLogger(),
         # 勿开 listsubtitles：会 to_screen 打印字幕表，Windows 下易触发 Errno 22
         "listsubtitles": False,
+        # B 站等站点需要合理 Referer；不配用户 Cookie
+        "http_headers": {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/131.0.0.0 Safari/537.36"
+            ),
+            "Referer": "https://www.bilibili.com/",
+        },
     }
     opts.update(extra)
+    # 允许调用方覆盖 headers，同时保留默认 Referer
+    if "http_headers" in extra:
+        merged = {
+            "User-Agent": opts["http_headers"].get("User-Agent"),
+            "Referer": "https://www.bilibili.com/",
+        }
+        merged.update(extra["http_headers"] or {})
+        opts["http_headers"] = merged
     return opts
 
 
-def _safe_filename(title: str) -> str:
-    """去掉 Windows 非法文件名字符。"""
-    cleaned = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", title or "video")
-    cleaned = cleaned.strip(" .")[:80] or "video"
-    return cleaned
+def _info_to_parse_result(info: dict[str, Any], url: str) -> dict[str, Any]:
+    """把 yt-dlp sanitize 后的 info 转成前端 data。"""
+    raw_formats = info.get("formats") or []
+    parsed = []
+    for fmt in raw_formats:
+        entry = _format_entry(fmt)
+        if entry:
+            parsed.append(entry)
+
+    formats = _dedupe_formats(parsed)
+
+    extractor = info.get("extractor_key") or info.get("extractor") or "unknown"
+    duration = info.get("duration")
+    webpage_url = info.get("webpage_url") or url
+    subs = _collect_subtitles(info)
+    try:
+        from app.bilibili_subs import merge_bilibili_tracks_into_subtitles
+
+        subs = merge_bilibili_tracks_into_subtitles(webpage_url, subs)
+    except Exception:  # noqa: BLE001
+        pass
+
+    return {
+        "id": info.get("id"),
+        "title": info.get("title") or "未命名视频",
+        "thumbnail": _pick_thumbnail(info),
+        "duration": duration,
+        "duration_string": info.get("duration_string")
+        or (_format_duration(duration) if duration else None),
+        "uploader": info.get("uploader") or info.get("channel"),
+        "description": (info.get("description") or "")[:280] or None,
+        "view_count": info.get("view_count"),
+        "webpage_url": webpage_url,
+        "extractor": extractor,
+        "formats": formats,
+        "subtitles": subs,
+        "original_url": url,
+    }
+
+
+def _parse_with_ytdlp(url: str) -> dict[str, Any]:
+    """通用 yt-dlp 解析（含 B 站，依赖 extractor 内置 WBI，无需 SESSDATA）。"""
+    ydl_opts: dict[str, Any] = _base_ydl_opts(
+        skip_download=True,
+        noplaylist=True,
+        writesubtitles=False,
+        writeautomaticsub=False,
+    )
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=False)
+        if info is None:
+            raise ValueError("无法解析该链接，请检查 URL 是否有效")
+        info = ydl.sanitize_info(info)
+
+    if info.get("_type") == "playlist":
+        entries = info.get("entries") or []
+        if not entries:
+            raise ValueError("播放列表为空")
+        first = entries[0]
+        if isinstance(first, dict) and first.get("url") and not first.get("formats"):
+            return _parse_with_ytdlp(
+                first.get("webpage_url") or first["url"]
+            )
+        info = first if isinstance(first, dict) else info
+
+    return _info_to_parse_result(info, url)
+
+
+def parse_video(url: str) -> dict[str, Any]:
+    """解析视频信息（不下载文件），返回前端所需的 data 结构。"""
+    # 抖音：yt-dlp 强依赖 Cookie；走分享页无 Cookie 方案
+    if is_douyin_url(url):
+        return parse_douyin(url)
+
+    # B 站：优先 yt-dlp（内置 WBI 签名，无需 SESSDATA）；失败再回退官方 API 旁路
+    if is_bilibili_url(url):
+        ytdlp_err: Exception | None = None
+        try:
+            return _parse_with_ytdlp(url)
+        except Exception as exc:  # noqa: BLE001
+            ytdlp_err = exc
+        try:
+            return parse_bilibili(url)
+        except Exception as api_exc:  # noqa: BLE001
+            detail = str(ytdlp_err or api_exc)
+            raise ValueError(
+                "无法解析该 B 站视频（yt-dlp 与官方 API 均失败）。"
+                f"请确认链接公开可访问。详情：{detail}"
+            ) from api_exc
+
+    return _parse_with_ytdlp(url)
 
 
 def _pick_thumbnail(info: dict[str, Any]) -> str | None:
@@ -359,76 +466,6 @@ def fetch_subtitle_url_content(track_url: str, *, page_url: str | None = None) -
         return text
 
 
-def parse_video(url: str) -> dict[str, Any]:
-    """解析视频信息（不下载文件），返回前端所需的 data 结构。"""
-    # 抖音：yt-dlp 强依赖 Cookie；走分享页无 Cookie 方案
-    if is_douyin_url(url):
-        return parse_douyin(url)
-    # B 站：yt-dlp 抓网页易 412，改走官方 API
-    if is_bilibili_url(url):
-        return parse_bilibili(url)
-
-    ydl_opts: dict[str, Any] = _base_ydl_opts(
-        skip_download=True,
-        noplaylist=True,  # 播放列表只取首条，避免一次解析过大
-        writesubtitles=False,
-        writeautomaticsub=False,
-    )
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-        if info is None:
-            raise ValueError("无法解析该链接，请检查 URL 是否有效")
-        # sanitize_info：保证可 JSON 序列化
-        info = ydl.sanitize_info(info)
-
-    if info.get("_type") == "playlist":
-        entries = info.get("entries") or []
-        if not entries:
-            raise ValueError("播放列表为空")
-        # MVP：仅处理第一条；flat 条目可能只有 url，需再解析一次
-        first = entries[0]
-        if isinstance(first, dict) and first.get("url") and not first.get("formats"):
-            return parse_video(first["url"] if first.get("webpage_url") is None else first.get("webpage_url") or first["url"])
-        info = first if isinstance(first, dict) else info
-
-    raw_formats = info.get("formats") or []
-    parsed = []
-    for fmt in raw_formats:
-        entry = _format_entry(fmt)
-        if entry:
-            parsed.append(entry)
-
-    formats = _dedupe_formats(parsed)
-
-    extractor = info.get("extractor_key") or info.get("extractor") or "unknown"
-    duration = info.get("duration")
-    webpage_url = info.get("webpage_url") or url
-    subs = _collect_subtitles(info)
-    try:
-        from app.bilibili_subs import merge_bilibili_tracks_into_subtitles
-
-        subs = merge_bilibili_tracks_into_subtitles(webpage_url, subs)
-    except Exception:  # noqa: BLE001
-        pass
-
-    return {
-        "id": info.get("id"),
-        "title": info.get("title") or "未命名视频",
-        "thumbnail": _pick_thumbnail(info),
-        "duration": duration,
-        "duration_string": info.get("duration_string")
-        or (_format_duration(duration) if duration else None),
-        "uploader": info.get("uploader") or info.get("channel"),
-        "description": (info.get("description") or "")[:280] or None,
-        "view_count": info.get("view_count"),
-        "webpage_url": webpage_url,
-        "extractor": extractor,
-        "formats": formats,
-        "subtitles": subs,
-        "original_url": url,
-    }
-
-
 def _format_duration(seconds: float | int | None) -> str | None:
     if seconds is None:
         return None
@@ -449,7 +486,8 @@ def download_video(
     """下载到 outdir，返回最终文件路径（合并后扩展名可能变为 mp4）。"""
     if is_douyin_url(url) or str(format_id or "").startswith("dy:"):
         return download_douyin(url, format_id, outdir, progress_hook=progress_hook)
-    if is_bilibili_url(url) or str(format_id or "").startswith("bili:"):
+    # 仅官方 API 旁路产出的 bili:qn:* 走自定义下载；yt-dlp 解析出的 format 走通用路径
+    if str(format_id or "").startswith("bili:"):
         return download_bilibili(url, format_id, outdir, progress_hook=progress_hook)
 
     outdir.mkdir(parents=True, exist_ok=True)
@@ -522,7 +560,8 @@ def resolve_direct_url(url: str, format_id: str) -> dict[str, Any]:
     """
     if is_douyin_url(url) or str(format_id or "").startswith("dy:"):
         return resolve_douyin_direct(url, format_id)
-    if is_bilibili_url(url) or str(format_id or "").startswith("bili:"):
+    # 仅官方 API 旁路的 bili:qn:*；yt-dlp 清晰度走下方通用逻辑
+    if str(format_id or "").startswith("bili:"):
         return resolve_bilibili_direct(url, format_id)
 
     fid = (format_id or "").strip()

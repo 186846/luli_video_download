@@ -217,7 +217,7 @@ function isLocked(fmt) {
           :disabled="summarizing"
           @click="emit('summarize')"
         >
-          {{ summarizing ? '总结中…' : isVip ? 'AI 总结' : 'AI 总结（需演示会员）' }}
+          {{ summarizing ? '总结中…' : isVip ? 'AI 总结' : 'AI 总结（免费每天 3 次）' }}
         </button>
         <span class="summary-hint">将打开总结详情页：摘要 · 字幕 · 思维导图 · AI 问答</span>
       </div>

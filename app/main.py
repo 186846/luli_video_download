@@ -3,27 +3,36 @@ FastAPI 入口：对外暴露 REST API，前端由 Vue(Vite) 独立运行。
 
 阶段 3 主路径：parse → download → tasks → files
 扩展能力：direct 直链、subtitles 字幕、summarize AI 总结、thumbnail 封面代理
+账号与 Stripe：auth / billing
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+import time
 import uuid
+from collections import defaultdict
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
+from app import auth_store, billing, ai_quota
+from app.auth_store import COOKIE_NAME
 from app.config import (
+    AI_REQUIRE_VIP,
+    ALLOW_DEMO_VIP,
     BRAND_EN,
     BRAND_NAME,
     DOWNLOAD_DIR,
+    FREE_AI_SUMMARIZE_DAILY,
     FREE_MAX_HEIGHT,
-    AI_REQUIRE_VIP,
+    VIP_PRICE_CENTS,
 )
+from app.db import init_db
 from app.downloader import (
     download_subtitle,
     format_requires_vip,
@@ -44,11 +53,12 @@ from app.thumb_proxy import fetch_thumbnail
 _summarizer = VideoSummarizer()
 
 DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+init_db()
 
 app = FastAPI(
     title=f"{BRAND_NAME} / {BRAND_EN}",
     description="学习向万能视频下载演示（基于 yt-dlp）。请尊重版权。",
-    version="0.4.0",
+    version="0.5.0",
 )
 
 # 开发期允许 Vite 与局域网前端跨域；生产建议同源反代 /api
@@ -64,6 +74,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 简单内存限流：邮箱/IP → 时间戳列表
+_auth_hits: dict[str, list[float]] = defaultdict(list)
+_AUTH_WINDOW_SEC = 60
+_AUTH_MAX_HITS = 20
+
 
 class ParseRequest(BaseModel):
     url: str = Field(..., min_length=4, description="视频页面链接")
@@ -75,7 +90,7 @@ class DownloadRequest(BaseModel):
     height: int | None = None
     vip_token: str | None = Field(
         default=None,
-        description="演示用 VIP 标记，值为 demo-vip 时解锁高清",
+        description="仅当 SPEEDYDL_ALLOW_DEMO_VIP=1 时，demo-vip 可解锁高清",
     )
 
 
@@ -121,9 +136,110 @@ class AskRequest(BaseModel):
     )
 
 
-def _require_ai_vip(vip_token: str | None) -> None:
-    """演示项目：VIP 校验已关闭，任何请求均可使用 AI 总结。"""
-    return None
+class AuthCredentials(BaseModel):
+    email: str = Field(..., min_length=3, max_length=254)
+    password: str = Field(..., min_length=8, max_length=128)
+
+
+def _client_key(request: Request, email: str = "") -> str:
+    host = request.client.host if request.client else "unknown"
+    return f"{host}:{email.lower()}"
+
+
+def _rate_limit_auth(request: Request, email: str = "") -> None:
+    key = _client_key(request, email)
+    now = time.time()
+    hits = _auth_hits[key]
+    _auth_hits[key] = [t for t in hits if now - t < _AUTH_WINDOW_SEC]
+    if len(_auth_hits[key]) >= _AUTH_MAX_HITS:
+        raise HTTPException(status_code=429, detail="尝试过于频繁，请稍后再试")
+    _auth_hits[key].append(now)
+
+
+def _session_token_from_request(request: Request) -> str | None:
+    auth = request.headers.get("Authorization") or ""
+    if auth.lower().startswith("bearer "):
+        token = auth[7:].strip()
+        if token:
+            return token
+    return request.cookies.get(COOKIE_NAME)
+
+
+def _current_user(request: Request) -> dict | None:
+    return auth_store.get_user_by_session(_session_token_from_request(request))
+
+
+def _require_user(request: Request) -> dict:
+    user = _current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="请先登录")
+    return user
+
+
+def _set_session_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        key=COOKIE_NAME,
+        value=token,
+        httponly=True,
+        samesite="lax",
+        max_age=auth_store.SESSION_DAYS * 24 * 3600,
+        path="/",
+    )
+
+
+def _clear_session_cookie(response: Response) -> None:
+    response.delete_cookie(key=COOKIE_NAME, path="/")
+
+
+def _user_is_vip(request: Request, vip_token: str | None = None) -> bool:
+    user = _current_user(request)
+    if user and user.get("is_vip"):
+        return True
+    if ALLOW_DEMO_VIP and vip_token == "demo-vip":
+        return True
+    return False
+
+
+def _require_ai_vip(request: Request, vip_token: str | None) -> None:
+    """问答等：需登录（免费/VIP 均可）；演示 token 可选。"""
+    if not AI_REQUIRE_VIP:
+        return
+    if ALLOW_DEMO_VIP and vip_token == "demo-vip":
+        return
+    user = _current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="请先登录后再使用 AI 功能")
+
+
+def _require_summarize_access(request: Request, vip_token: str | None = None) -> dict:
+    """AI 总结：必须登录；VIP 无限；免费每日限额并扣减。"""
+    if ALLOW_DEMO_VIP and vip_token == "demo-vip":
+        return {
+            "is_vip": True,
+            "remaining": None,
+            "used": 0,
+            "daily_limit": FREE_AI_SUMMARIZE_DAILY,
+        }
+    user = _current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="请先登录后再使用 AI 总结")
+    fresh = auth_store.get_user_by_id(user["id"]) or user
+    try:
+        return ai_quota.consume_summarize_quota(fresh)
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+
+def _public_user(user: dict) -> dict:
+    snap = ai_quota.quota_snapshot(user)
+    return {
+        "id": user["id"],
+        "email": user["email"],
+        "is_vip": bool(user["is_vip"]),
+        "ai_summarize_remaining": snap["ai_summarize_remaining"],
+        "ai_summarize_used_today": snap["ai_summarize_used_today"],
+        "ai_summarize_daily_limit": snap["ai_summarize_daily_limit"],
+    }
 
 
 @app.get("/api/health")
@@ -133,6 +249,9 @@ def health() -> dict:
         "ok": True,
         "brand": BRAND_NAME,
         "free_max_height": FREE_MAX_HEIGHT,
+        "vip_price_cents": VIP_PRICE_CENTS,
+        "allow_demo_vip": ALLOW_DEMO_VIP,
+        "free_ai_summarize_daily": FREE_AI_SUMMARIZE_DAILY,
         "features": [
             "parse",
             "download",
@@ -144,8 +263,99 @@ def health() -> dict:
             "chat",
             "progress",
             "sse",
+            "auth",
+            "billing",
         ],
         "notice": "仅供个人学习，请尊重版权，勿用于商业传播",
+    }
+
+
+@app.post("/api/auth/register")
+def api_register(body: AuthCredentials, request: Request, response: Response) -> dict:
+    _rate_limit_auth(request, body.email)
+    try:
+        user = auth_store.create_user(body.email, body.password)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    token = auth_store.create_session(user["id"])
+    _set_session_cookie(response, token)
+    return {"ok": True, "user": _public_user(user), "token": token}
+
+
+@app.post("/api/auth/login")
+def api_login(body: AuthCredentials, request: Request, response: Response) -> dict:
+    _rate_limit_auth(request, body.email)
+    try:
+        user = auth_store.authenticate(body.email, body.password)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    token = auth_store.create_session(user["id"])
+    _set_session_cookie(response, token)
+    return {"ok": True, "user": _public_user(user), "token": token}
+
+
+@app.post("/api/auth/logout")
+def api_logout(request: Request, response: Response) -> dict:
+    auth_store.delete_session(_session_token_from_request(request))
+    _clear_session_cookie(response)
+    return {"ok": True}
+
+
+@app.get("/api/auth/me")
+def api_me(request: Request) -> dict:
+    user = _current_user(request)
+    if not user:
+        return {"ok": True, "user": None}
+    # 重新读库，确保 VIP 开通后立刻可见
+    fresh = auth_store.get_user_by_id(user["id"]) or user
+    return {"ok": True, "user": _public_user(fresh)}
+
+
+@app.post("/api/billing/checkout")
+def api_billing_checkout(request: Request) -> dict:
+    user = _require_user(request)
+    fresh = auth_store.get_user_by_id(user["id"]) or user
+    try:
+        data = billing.create_checkout_session(fresh)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {"ok": True, "data": data}
+
+
+@app.post("/api/billing/webhook")
+async def api_billing_webhook(request: Request) -> dict:
+    payload = await request.body()
+    sig = request.headers.get("stripe-signature")
+    try:
+        result = billing.handle_webhook(payload, sig)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return result
+
+
+@app.get("/api/billing/session-status")
+def api_billing_session_status(
+    request: Request,
+    session_id: str = Query(..., min_length=8),
+) -> dict:
+    user = _require_user(request)
+    try:
+        data = billing.get_session_status(session_id, user["id"])
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=f"查询失败：{exc}") from exc
+    fresh = auth_store.get_user_by_id(user["id"])
+    return {
+        "ok": True,
+        "data": data,
+        "user": _public_user(fresh) if fresh else None,
     }
 
 
@@ -166,17 +376,17 @@ def api_parse(body: ParseRequest) -> dict:
 
 
 @app.post("/api/download")
-def api_download(body: DownloadRequest) -> dict:
+def api_download(body: DownloadRequest, request: Request) -> dict:
     """创建服务端下载任务（模式①：落盘后通过 /api/files 取回）。"""
     url = body.url.strip()
     format_id = body.format_id.strip()
-    is_vip = body.vip_token == "demo-vip"
+    is_vip = _user_is_vip(request, body.vip_token)
 
     # 与前端 VIP 门禁双校验，防止直接调 API 绕过
     if format_requires_vip(format_id, body.height) and not is_vip:
         raise HTTPException(
             status_code=403,
-            detail=f"超过免费清晰度上限（{FREE_MAX_HEIGHT}p），请开通演示会员后重试",
+            detail=f"超过免费清晰度上限（{FREE_MAX_HEIGHT}p），请开通会员后重试",
         )
 
     try:
@@ -190,16 +400,16 @@ def api_download(body: DownloadRequest) -> dict:
 
 
 @app.post("/api/direct")
-def api_direct(body: DirectRequest) -> dict:
+def api_direct(body: DirectRequest, request: Request) -> dict:
     """解析单流直链（模式②：不落盘）。需合并音视频的 format 会失败。"""
     url = body.url.strip()
     format_id = body.format_id.strip()
-    is_vip = body.vip_token == "demo-vip"
+    is_vip = _user_is_vip(request, body.vip_token)
 
     if format_requires_vip(format_id, body.height) and not is_vip:
         raise HTTPException(
             status_code=403,
-            detail=f"超过免费清晰度上限（{FREE_MAX_HEIGHT}p），请开通演示会员后重试",
+            detail=f"超过免费清晰度上限（{FREE_MAX_HEIGHT}p），请开通会员后重试",
         )
 
     try:
@@ -231,13 +441,13 @@ def api_subtitle_download(body: SubtitleDownloadRequest) -> FileResponse:
 
 
 @app.post("/api/summarize")
-def api_summarize(body: SummarizeRequest) -> dict:
+def api_summarize(body: SummarizeRequest, request: Request) -> dict:
     """创建 AI 视频总结后台任务，立即返回 task_id 供前端轮询。"""
     url = body.url.strip()
     if not url.startswith(("http://", "https://")):
         raise HTTPException(status_code=400, detail="请输入有效链接")
 
-    _require_ai_vip(body.vip_token)
+    quota = _require_summarize_access(request, body.vip_token)
 
     try:
         task = create_summary_task(
@@ -251,7 +461,7 @@ def api_summarize(body: SummarizeRequest) -> dict:
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=400, detail=f"创建总结任务失败：{exc}") from exc
 
-    return {"ok": True, "task_id": task.id}
+    return {"ok": True, "task_id": task.id, "quota": quota}
 
 
 @app.get("/api/summarize/status/{task_id}")
@@ -330,13 +540,13 @@ async def api_summarize_stream(task_id: str):
 
 
 @app.post("/api/summarize/ask")
-def api_summarize_ask(body: AskRequest) -> dict:
+def api_summarize_ask(body: AskRequest, request: Request) -> dict:
     """针对视频内容的 AI 问答（字幕优先；无 Key 时 Mock）。兼容旧客户端。"""
     url = body.url.strip()
     if not url.startswith(("http://", "https://")):
         raise HTTPException(status_code=400, detail="请输入有效链接")
 
-    _require_ai_vip(body.vip_token)
+    _require_ai_vip(request, body.vip_token)
 
     try:
         data = _summarizer.ask(
@@ -356,13 +566,13 @@ def api_summarize_ask(body: AskRequest) -> dict:
 
 
 @app.post("/api/chat")
-async def api_chat(body: AskRequest):
+async def api_chat(body: AskRequest, request: Request):
     """AI 问答 SSE：status / token / done / error。"""
     url = body.url.strip()
     if not url.startswith(("http://", "https://")):
         raise HTTPException(status_code=400, detail="请输入有效链接")
 
-    _require_ai_vip(body.vip_token)
+    _require_ai_vip(request, body.vip_token)
 
     def event_gen():
         for item in iter_ask_events(

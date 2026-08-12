@@ -1,11 +1,11 @@
 # 速下 SpeedyDL — 接口文档
 
-版本：`0.3.0`  
+版本：`0.5.0`  
 Base URL（本地）：`http://127.0.0.1:8001`（若改回 8000，请同步 Vite 代理）  
 交互式文档：`http://127.0.0.1:8001/docs`（Swagger） / `http://127.0.0.1:8001/redoc`
 
 > 仅供个人学习。请尊重版权与各平台服务条款。  
-> 关联文档：[需求分析](./需求分析.md) · [方案设计](./方案设计.md) · [部署文档](./部署文档.md)
+> 关联文档：[需求分析](./需求分析.md) · [方案设计](./方案设计.md) · [部署文档](./部署文档.md) · [Stripe会员接入](./Stripe会员接入.md)
 
 ---
 
@@ -16,7 +16,8 @@ Base URL（本地）：`http://127.0.0.1:8001`（若改回 8000，请同步 Vite
 | 协议 | HTTP/1.1，JSON 请求体 `Content-Type: application/json` |
 | 字符集 | UTF-8 |
 | CORS | 允许 `localhost` / `127.0.0.1` / 常见局域网 IP 的前端端口 |
-| VIP | 演示令牌：请求体字段 `vip_token` 传 `"demo-vip"` 可解锁超过免费清晰度（默认 >720p） |
+| VIP | 登录会话 Cookie `speedydl_session`；账号 `is_vip` 由 Stripe Webhook 开通。可选 `SPEEDYDL_ALLOW_DEMO_VIP=1` 时请求体 `vip_token=demo-vip` 仍可用 |
+| 鉴权 | 写操作携带 Cookie（`credentials: include`）或 `Authorization: Bearer <token>` |
 | 错误体 | `{ "detail": "错误说明字符串" }` |
 
 ### 通用错误码
@@ -24,11 +25,13 @@ Base URL（本地）：`http://127.0.0.1:8001`（若改回 8000，请同步 Vite
 | HTTP | 含义 |
 |------|------|
 | 400 | 参数错误 / 解析失败 / 业务失败 |
-| 403 | 超过免费清晰度且未带有效 VIP |
+| 401 | 未登录 |
+| 403 | 超过免费清晰度或 AI 功能且非会员 |
 | 404 | 资源不存在或已清理 |
 | 409 | 下载任务未完成，文件未就绪 |
-| 429 | 并发下载任务已满（默认最多 2 个） |
+| 429 | 并发下载任务已满 / 登录注册过于频繁 |
 | 502 | 封面代理拉取失败 |
+| 503 | Stripe 未配置或上游不可用 |
 
 ---
 
@@ -37,13 +40,20 @@ Base URL（本地）：`http://127.0.0.1:8001`（若改回 8000，请同步 Vite
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/api/health` | 健康检查 |
+| POST | `/api/auth/register` | 邮箱密码注册 |
+| POST | `/api/auth/login` | 登录（Set-Cookie） |
+| POST | `/api/auth/logout` | 注销 |
+| GET | `/api/auth/me` | 当前用户与 `is_vip` |
+| POST | `/api/billing/checkout` | 创建 Stripe Checkout（需登录） |
+| POST | `/api/billing/webhook` | Stripe Webhook（原始 body 验签） |
+| GET | `/api/billing/session-status` | 回跳后查询 Session（需登录） |
 | POST | `/api/parse` | 解析视频元数据、格式、字幕列表 |
 | POST | `/api/download` | 创建服务端下载任务（模式①） |
 | GET | `/api/tasks/{task_id}` | 查询下载进度 |
 | GET | `/api/files/{task_id}` | 下载已完成的文件 |
 | POST | `/api/direct` | 解析单流直链（模式②） |
 | POST | `/api/subtitles/download` | 下载字幕文件（API 保留；首页 UI 已移除，总结页导出 TXT/SRT/VTT） |
-| POST | `/api/summarize` | AI 视频总结（异步任务；无 Key 时 Mock） |
+| POST | `/api/summarize` | AI 视频总结（异步任务；默认需会员） |
 | GET | `/api/summarize/status/{task_id}` | 总结任务状态轮询 |
 | GET | `/api/summarize/stream/{task_id}` | 总结进度 SSE |
 | POST | `/api/summarize/ask` | 针对视频内容的 AI 问答（同步） |
@@ -68,6 +78,42 @@ Base URL（本地）：`http://127.0.0.1:8001`（若改回 8000，请同步 Vite
   "notice": "仅供个人学习，请尊重版权，勿用于商业传播"
 }
 ```
+
+---
+
+## 1b. 账号与支付
+
+详见 [Stripe会员接入.md](./Stripe会员接入.md)。
+
+### 注册
+
+`POST /api/auth/register`
+
+```json
+{ "email": "you@example.com", "password": "password123" }
+```
+
+成功：`{ "ok": true, "user": { "id", "email", "is_vip" }, "token" }`，并 `Set-Cookie: speedydl_session=...`。
+
+### 登录 / 注销 / 当前用户
+
+- `POST /api/auth/login` — 同上 body  
+- `POST /api/auth/logout`  
+- `GET /api/auth/me` — `{ "ok": true, "user": null | { ... } }`
+
+### 创建 Checkout
+
+`POST /api/billing/checkout`（需登录）
+
+成功：`{ "ok": true, "data": { "url", "session_id", "order_id" } }` — 前端跳转 `url`。
+
+### Webhook
+
+`POST /api/billing/webhook` — 原始 body；校验 `Stripe-Signature`；处理 `checkout.session.completed` / `async_payment_succeeded`。
+
+### Session 状态（回跳）
+
+`GET /api/billing/session-status?session_id=cs_...`（需登录）— 不以本接口开通 VIP。
 
 ---
 

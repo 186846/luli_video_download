@@ -1,16 +1,31 @@
 /**
- * 演示会员开通（非真实支付）。
- * 实际状态写入见 composables/useVip.js。
+ * Stripe 会员购买 API。
  */
-import { VIP_TOKEN } from './auth'
+import { request } from './http'
 
-/** 开通演示会员后可附带的令牌说明 */
-export function demoMembershipPlan() {
+export const VIP_PRICE_USD = '9.90'
+
+/** 创建 Checkout，返回 { url, session_id, order_id } */
+export async function createCheckout() {
+  const json = await request('/api/billing/checkout', {
+    method: 'POST',
+    body: '{}',
+  })
+  return json.data
+}
+
+/** 支付回跳后查询会话（不以本接口开通 VIP） */
+export function getBillingSessionStatus(sessionId) {
+  return request(
+    `/api/billing/session-status?session_id=${encodeURIComponent(sessionId)}`,
+  )
+}
+
+export function membershipPlan() {
   return {
-    id: 'demo-vip',
-    name: '演示会员',
-    price: 0,
-    token: VIP_TOKEN,
-    note: '学习演示，无真实扣款',
+    id: 'lifetime-vip',
+    name: '永久会员',
+    priceUsd: VIP_PRICE_USD,
+    note: '一次性付款，解锁 1080p+ 与 AI 总结',
   }
 }
