@@ -14,6 +14,7 @@
 | [docs/方案设计.md](docs/方案设计.md) | 架构、模块职责、核心流程、扩展指引 |
 | [docs/API.md](docs/API.md) | HTTP 接口契约与示例 |
 | [docs/部署文档.md](docs/部署文档.md) | 开发联调、构建、Nginx/Caddy 同源反代与运维要点 |
+| [docs/腾讯云部署.md](docs/腾讯云部署.md) | 腾讯云轻量 + 宝塔 LNMP + 域名 + HTTPS + Supervisor 线上部署 |
 | [docs/SEO说明.md](docs/SEO说明.md) | 前端 SEO / GEO、换域名、站长平台与 AI 抽检清单 |
 | [docs/GEO优化入门指南.md](docs/GEO优化入门指南.md) | 生成式引擎优化要点与本站已落地项 |
 | [docs/项目总结.md](docs/项目总结.md) | 主功能完成后的能力清单、决策与限制 |
@@ -67,7 +68,8 @@ npm run dev
 
 浏览器：**http://127.0.0.1:5173**
 
-演示/准生产（构建前端 + 反代 `/api`）见 **[docs/部署文档.md](docs/部署文档.md)**。
+演示/准生产（构建前端 + 反代 `/api`）见 **[docs/部署文档.md](docs/部署文档.md)**。  
+**腾讯云线上部署**见 **[docs/腾讯云部署.md](docs/腾讯云部署.md)**。
 
 ## API
 
